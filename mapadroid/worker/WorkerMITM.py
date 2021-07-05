@@ -148,6 +148,7 @@ class WorkerMITM(MITMBase):
             # apears but it is a fact.
             max_age = time.time() - 60
 
+            remove_time = time.time()
             remove = []
             for key, value in self._encounter_ids.items():
                 if value < max_age:
@@ -155,8 +156,9 @@ class WorkerMITM(MITMBase):
 
             for key in remove:
                 del self._encounter_ids[key]
+            remove_time = time.time() - remove_time
 
-            self.logger.debug("Encounter list len: {}", len(self._encounter_ids))
+            self.logger.debug("Encounter list len: {} (time to remove old: {})", len(self._encounter_ids), remove_time)
             # TODO: here we have the latest update of encountered mons.
             # self._encounter_ids contains the complete dict.
             # encounter_ids only contains the newest update.

@@ -51,6 +51,10 @@ class RouteManagerIV(RouteManagerBase):
 
         with self._manager_mutex:
             heapq.heapify(latest_priorities)
+            cur_len = 0
+            if self._prio_queue is not None:
+                cur_len = len(self._prio_queue)
+            self.logger.debug('%s -- prioq being replaced.. old length %d, new length %d' % (self.mode, cur_len, len(latest_priorities)))
             self._prio_queue = latest_priorities
         return None
 

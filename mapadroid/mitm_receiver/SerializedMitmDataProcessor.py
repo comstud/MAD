@@ -142,7 +142,11 @@ class SerializedMitmDataProcessor(Process):
                         )
 
                     end_time = self.get_time_ms() - start_time
-                    origin_logger.debug("Done processing encounter in {}ms", end_time)
+                    if encounter:
+                        extra = 'encounter_id %s' % encounter[0][0]
+                    else:
+                        extra ='cached'
+                    origin_logger.debug("Done processing encounter in {}ms ({})", end_time, extra)
                 else:
                     origin_logger.warning("Playerlevel lower than 30 - not processing encounter IVs")
 
