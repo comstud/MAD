@@ -387,12 +387,19 @@ class DbWrapper:
                 "min_time_left_seconds and mon_ids_iv ")
             return []
         logger.debug3("Getting mons to be encountered")
+
+        include_nearby_cell = self.application_args.comstud_nearby_cell_in_prioq
+        if include_nearby_cell:
+            seen_type_filter = ''
+        else:
+            seen_type_filter = "AND seen_type != 'nearby_cell' "
+
         query = (
             "SELECT latitude, longitude, encounter_id, spawnpoint_id, pokemon_id, "
             "TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), disappear_time) AS expire, seen_type, cell_id "
             "FROM pokemon "
             "WHERE individual_attack IS NULL AND individual_defense IS NULL AND individual_stamina IS NULL "
-            "AND encounter_id != 0 AND seen_type != 'nearby_cell' "
+            "AND encounter_id != 0 " + seen_type_filter +
             "and (disappear_time BETWEEN DATE_ADD(UTC_TIMESTAMP(), INTERVAL %s SECOND) "
             "and DATE_ADD(UTC_TIMESTAMP(), INTERVAL 60 MINUTE))"
             "ORDER BY expire ASC"
@@ -438,12 +445,27 @@ class DbWrapper:
                         )
 
                         if len(spawns) == 0:
+                            logger.debug('prioq: adding nearby_cell mon {} (encounter_id {}) to prioq with no spawnpoints(mon loc: {}) for cell_id {}',
+                                mon_id,
+                                encounter_id,
+                                location,
+                                cell_id)
                             to_be_encountered.append((i, location, encounter_id))
                         else:
                             for _, spawn_location in spawns:
+                                logger.debug('prioq: adding nearby_cell mon {} (encounter_id {}) to prioq with cell spawnpoint({}) for cell_id {}',
+                                    mon_id,
+                                    encounter_id,
+                                    spawn_location,
+                                    cell_id)
                                 to_be_encountered.append((i, spawn_location, encounter_id))
                                 i += 1
                     else:
+                        logger.debug('prioq: adding {} mon {} (encounter_id {}) at loc {} to prioq',
+                            seen_type,
+                            mon_id,
+                            encounter_id,
+                            location)
                         to_be_encountered.append((i, location, encounter_id))
             i += 1
         return to_be_encountered

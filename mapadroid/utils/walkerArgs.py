@@ -111,6 +111,8 @@ def parse_args():
                         help='Run in ConfigMode')
     parser.add_argument('-nm', '--scan_nearby_mons', action='store_true', default=False,
                         help='Enable scanning of nearby mons')
+    parser.add_argument('-nbcpq', '--comstud_nearby_cell_in_prioq', action='store_true', default=False,
+                        help='Enable adding nearby_cell mons to prioq')
     parser.add_argument('-dnc', '--disable_nearby_cell', action='store_true', default=False,
                         help='Disables nearby_cell scans if scan_nearby_mons is enabled')
     parser.add_argument('-lm', '--scan_lured_mons', action='store_true', default=False,
