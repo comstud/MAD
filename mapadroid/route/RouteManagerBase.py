@@ -734,9 +734,6 @@ class RouteManagerBase(ABC):
             # Recurse removal for very very large queue sizes - we know we should find the next available coord now
             while len(self._routepool[origin].queue) > 0:
                 next_coord = self._routepool[origin].queue.popleft()
-                if self._delete_coord_after_fetch() and next_coord in self._current_route_round_coords \
-                        and not self.init:
-                    self._current_route_round_coords.remove(next_coord)
                 route_logger.info("Moving on with location {}, {} [{} coords left (Workerpool)]", next_coord.lat,
                                   next_coord.lng, len(self._routepool[origin].queue) + 1)
                 self._last_round_prio[origin] = False
