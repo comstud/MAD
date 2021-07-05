@@ -1,9 +1,19 @@
+import pickle
 from . import global_variables
 
 
 class APIException(Exception):
     def __init__(self, status_code, reason=None):
         self.status_code = status_code
+        p = None
+        try:
+            p = pickle.dumps(reason)
+            pickle.loads(p)
+        except Exception:
+            try:
+                reason = 'could not pickle: %s' % p
+            except Exception:
+                reason = 'could not pickle'
         self.reason = reason
         super(APIException, self).__init__(status_code, reason)
 
