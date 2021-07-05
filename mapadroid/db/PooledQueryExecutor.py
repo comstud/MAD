@@ -7,6 +7,9 @@ from mysql.connector.pooling import MySQLConnectionPool
 
 from mapadroid.utils.logging import LoggerEnums, get_logger
 
+# comstud hack to allow more db connections
+mysql.connector.pooling.CNX_POOL_MAXSIZE = 200
+
 logger = get_logger(LoggerEnums.database)
 
 
