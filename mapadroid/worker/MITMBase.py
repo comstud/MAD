@@ -133,9 +133,15 @@ class MITMBase(WorkerBase):
                           "Last received timestamp of that type was: {}",
                           proto_to_wait_for, datetime.fromtimestamp(timestamp), timeout,
                           datetime.fromtimestamp(timestamp) if last_time_received != TIMESTAMP_NEVER else "never")
+        self.logger.debug('cjb: waiting for data before first loop: {}, {}',
+                int(timestamp + timeout),
+                int(time.time()))
         while type_of_data_returned == LatestReceivedType.UNDEFINED and \
                 (int(timestamp + timeout) >= int(time.time()) or last_time_received >= timestamp) \
                 and not self._stop_worker_event.is_set():
+            self.logger.debug('cjb: waiting for data top of loop: {}, {}',
+                int(timestamp + timeout),
+                int(time.time()))
             latest = self._mitm_mapper.request_latest(self._origin)
 
             if latest is None:
@@ -172,6 +178,12 @@ class MITMBase(WorkerBase):
             # In case last_time_received was set, we reset it after the first
             # iteration to not run into trouble (endless loop)
             last_time_received = TIMESTAMP_NEVER
+            self.logger.debug('cjb: waiting for data end of loop: {}, {}',
+                int(timestamp + timeout),
+                int(time.time()))
+        self.logger.debug('cjb: waiting for data loop done: {}, {}',
+            int(timestamp + timeout),
+            int(time.time()))
 
         if type_of_data_returned != LatestReceivedType.UNDEFINED:
             self._reset_restart_count_and_collect_stats(position_type)
