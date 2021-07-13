@@ -1,4 +1,5 @@
 import heapq
+import time
 from typing import List
 
 from mapadroid.route.RouteManagerBase import RouteManagerBase
@@ -22,6 +23,7 @@ class RouteManagerIV(RouteManagerBase):
                                   )
         self.encounter_ids_left: List[int] = []
         self.starve_route = True
+        self.prioq_since = None
         if self.delay_after_timestamp_prio is None:
             # just set a value to enable the queue
             self.delay_after_timestamp_prio = 5
@@ -38,11 +40,11 @@ class RouteManagerIV(RouteManagerBase):
 
     def _retrieve_latest_priority_queue(self):
         # IV is excluded from clustering, check RouteManagerBase for more info
-        latest_priorities = self.db_wrapper.get_to_be_encountered(geofence_helper=self.geofence_helper,
+        self.prioq_since, latest_priorities = self.db_wrapper.get_to_be_encountered(geofence_helper=self.geofence_helper,
                                                                   min_time_left_seconds=self.settings.get(
                                                                       "min_time_left_seconds", None),
                                                                   eligible_mon_ids=self.settings.get(
-                                                                      "mon_ids_iv_raw", None))
+                                                                      "mon_ids_iv_raw", None), since=self.prioq_since)
         # extract the encounterIDs and set them in the routeManager...
         new_list = set()
         for prio in latest_priorities:
@@ -50,12 +52,16 @@ class RouteManagerIV(RouteManagerBase):
         self.encounter_ids_left = list(new_list)
 
         with self._manager_mutex:
-            heapq.heapify(latest_priorities)
             cur_len = 0
             if self._prio_queue is not None:
                 cur_len = len(self._prio_queue)
-            self.logger.debug('%s -- prioq being replaced.. old length %d, new length %d' % (self.mode, cur_len, len(latest_priorities)))
-            self._prio_queue = latest_priorities
+                for x in latest_priorities:
+                    heapq.heappush(self._prio_queue, x)
+            else:
+                heapq.heapify(latest_priorities)
+                self._prio_queue = latest_priorities
+            new_len = len(self._prio_queue)
+            self.logger.debug('%s -- prioq being updated.. old length %d, new length %d' % (self.mode, cur_len, len(self._prio_queue)))
         return None
 
     def get_encounter_ids_left(self) -> List[int]:
@@ -74,7 +80,17 @@ class RouteManagerIV(RouteManagerBase):
 
     def _should_check_prioq(self, origin: str) -> bool:
         # Override the base class. We only require the prioq to not be empty.
-        return self._prio_queue
+        return self._prio_queue or self._prioq_multi_entry.get(origin, None)
+
+    def _should_skip_prioq_entry(self, queue_entry) -> bool:
+        when = time.time()
+        min_time_left_seconds = self.settings.get("min_time_left_seconds", None)
+        if min_time_left_seconds:
+            when += min_time_left_seconds
+        expire_time = queue_entry[3]
+        if expire_time <= when:
+            return True
+        return False
 
     def _has_normal_route(self) -> bool:
         # Override the base class. We only use coords from prioq.

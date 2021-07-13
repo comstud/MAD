@@ -379,7 +379,7 @@ class DbWrapper:
         return {'pokemon': res, 'total': total}
 
     def get_to_be_encountered(self, geofence_helper, min_time_left_seconds,
-                              eligible_mon_ids: Optional[List[int]]):
+                              eligible_mon_ids: Optional[List[int]], since=None):
         if min_time_left_seconds is None or eligible_mon_ids is None:
             logger.warning(
                 "DbWrapper::get_to_be_encountered: Not returning any encounters since no time left or "
@@ -394,25 +394,42 @@ class DbWrapper:
         else:
             seen_type_filter = "AND seen_type != 'nearby_cell' "
 
+        if since is None:
+            since_filter = ''
+        else:
+            since_filter = ' and last_modified > FROM_UNIXTIME(%s)'
+
         query = (
-            "SELECT latitude, longitude, encounter_id, spawnpoint_id, pokemon_id, "
+            "SELECT UNIX_TIMESTAMP(last_modified), latitude, longitude, encounter_id, spawnpoint_id, pokemon_id, "
             "TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), disappear_time) AS expire, seen_type, cell_id "
             "FROM pokemon "
             "WHERE individual_attack IS NULL AND individual_defense IS NULL AND individual_stamina IS NULL "
             "AND encounter_id != 0 " + seen_type_filter +
             "and (disappear_time BETWEEN DATE_ADD(UTC_TIMESTAMP(), INTERVAL %s SECOND) "
-            "and DATE_ADD(UTC_TIMESTAMP(), INTERVAL 60 MINUTE))"
+            "and DATE_ADD(UTC_TIMESTAMP(), INTERVAL 60 MINUTE))" + since_filter +
             "ORDER BY expire ASC"
         )
 
-        sql_args = (
-            int(min_time_left_seconds),
-        )
+        if since is not None:
+            sql_args = (
+                int(min_time_left_seconds),
+                since,
+            )
+            logger.debug('getting prioq iv_mitm to-be-encountered since {}', since)
+        else:
+            sql_args = (
+                int(min_time_left_seconds),
+            )
 
         results = self.execute(query, sql_args, commit=False)
 
+        new_since = since
+
         next_to_encounter = []
-        for latitude, longitude, encounter_id, _spawnpoint_id, pokemon_id, _, seen_type, cellid in results:
+        now_epoch = time.time()
+        for last_modified, latitude, longitude, encounter_id, _spawnpoint_id, pokemon_id, expire, seen_type, cellid in results:
+            if new_since is None or last_modified > new_since:
+                new_since = last_modified
             if pokemon_id not in eligible_mon_ids:
                 continue
             elif latitude is None or longitude is None:
@@ -424,13 +441,13 @@ class DbWrapper:
                               " fences", latitude, longitude)
                 continue
 
-            next_to_encounter.append((pokemon_id, Location(latitude, longitude), encounter_id, seen_type, cellid))
+            next_to_encounter.append((pokemon_id, Location(latitude, longitude), encounter_id, seen_type, cellid, now_epoch+expire))
 
         # now filter by the order of eligible_mon_ids
         to_be_encountered = []
         i = 0
         for mon_prio in eligible_mon_ids:
-            for mon_id, location, encounter_id, seen_type, cell_id in next_to_encounter:
+            for mon_id, location, encounter_id, seen_type, cell_id, expire_epoch in next_to_encounter:
                 if mon_prio == mon_id:
                     if seen_type == "nearby_cell":
                         cell_coords = S2Helper.coords_of_cell(cell_id)
@@ -445,30 +462,36 @@ class DbWrapper:
                         )
 
                         if len(spawns) == 0:
-                            logger.debug('prioq: adding nearby_cell mon {} (encounter_id {}) to prioq with no spawnpoints(mon loc: {}) for cell_id {}',
+                            logger.debug('prioq: adding nearby_cell mon {} (encounter_id {}, expire {}) to prioq with no spawnpoints(mon loc: {}) for cell_id {}',
                                 mon_id,
                                 encounter_id,
+                                expire_epoch,
                                 location,
                                 cell_id)
-                            to_be_encountered.append((i, location, encounter_id))
+                            to_be_encountered.append((i, location, encounter_id, expire_epoch))
                         else:
+                            spawn_locations = []
                             for _, spawn_location in spawns:
-                                logger.debug('prioq: adding nearby_cell mon {} (encounter_id {}) to prioq with cell spawnpoint({}) for cell_id {}',
+                                logger.debug('prioq: adding nearby_cell mon {} (encounter_id {}, expire {}) to prioq with cell spawnpoint({}) for cell_id {}',
                                     mon_id,
                                     encounter_id,
+                                    expire_epoch,
                                     spawn_location,
                                     cell_id)
-                                to_be_encountered.append((i, spawn_location, encounter_id))
+                                # to_be_encountered.append((i, spawn_location, encounter_id, expire_epoch))
+                                spawn_locations.append(spawn_location)
                                 i += 1
+                            to_be_encountered.append((i, spawn_locations[0], encounter_id, expire_epoch, spawn_locations))
                     else:
-                        logger.debug('prioq: adding {} mon {} (encounter_id {}) at loc {} to prioq',
+                        logger.debug('prioq: adding {} mon {} (encounter_id {}, expire {}) at loc {} to prioq',
                             seen_type,
                             mon_id,
                             encounter_id,
+                            expire_epoch,
                             location)
-                        to_be_encountered.append((i, location, encounter_id))
+                        to_be_encountered.append((i, location, encounter_id, expire_epoch))
             i += 1
-        return to_be_encountered
+        return (new_since, to_be_encountered)
 
     def stop_from_db_without_quests(self, geofence_helper, latlng=True):
         logger.debug3("DbWrapper::stop_from_db_without_quests called")

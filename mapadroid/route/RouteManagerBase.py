@@ -95,6 +95,8 @@ class RouteManagerBase(ABC):
         self._round_started_time = None
         self._route: List[Location] = []
 
+        self._prioq_multi_entry = {}
+
         if coords is not None:
             if init:
                 fenced_coords = coords
@@ -523,9 +525,12 @@ class RouteManagerBase(ABC):
         own logic, if necessary. E.g., 'iv_mitm' only needs to check
         that the queue is not empty.
         '''
-        if not self._prio_queue:
-            return False
-        if self._prio_queue[0][0] >= time.time():
+        peaked_entry = self._prioq_multi_entry.get(origin, None)
+        if peaked_entry is None:
+            if not self._prio_queue:
+                return False
+            peaked_entry = self._prio_queue[0]
+        if peaked_entry[0] >= time.time():
             return False
         if self.delay_after_timestamp_prio is None:
             return False
@@ -608,7 +613,7 @@ class RouteManagerBase(ABC):
         if not self._has_normal_route():
             route_logger.debug("Checking if a location is available via the priority queue...")
             with self._manager_mutex:
-                got_location = self._prio_queue is not None and len(self._prio_queue) > 0
+                got_location = self._prioq_multi_entry.get(origin, None) or (self._prio_queue is not None and len(self._prio_queue) > 0)
             if not got_location:
                 # Sleep outside of the lock and retry.
                 time.sleep(1)
@@ -621,23 +626,38 @@ class RouteManagerBase(ABC):
 
             # determine whether we move to the next location or the prio queue top's item
             if self._should_check_prioq(origin):
-                next_prio = heapq.heappop(self._prio_queue)
-                next_coord = next_prio[1]
+                next_prio = self._prioq_multi_entry.get(origin, None)
+                if next_prio is None:
+                    next_prio = heapq.heappop(self._prio_queue)
+                if len(next_prio) > 4:
+                    route_logger.debug('prioq: popping from list of locations')
+                    next_coord = next_prio[4].pop(0)
+                    if next_prio[4]:
+                        self._prioq_multi_entry[origin] = next_prio
+                    else:
+                        self._prioq_multi_entry[origin] = None
+                else:
+                    next_coord = next_prio[1]
+
+                encounter_id = None
+                if len(next_prio) > 2:
+                    encounter_id = next_prio[2]
+
                 if self._should_skip_prioq_entry(next_prio):
-                    route_logger.warning("Prio event skipped, likely due to surpassing the "
+                    route_logger.warning("Prio event (encounter_id {}) skipped, likely due to surpassing the "
                                          "maximum backlog time. Make sure you run enough "
-                                         "workers or reduce the size of the area!")
+                                         "workers or reduce the size of the area!", encounter_id)
                     return (None, True)
 
                 if self._can_pass_prioq_coords() and self._other_worker_closer_to_prioq(next_coord, origin):
-                    route_logger.info("Prio event at {}, {} passed to a closer worker.",
-                                      next_coord.lat, next_coord.lng)
+                    route_logger.info("Prio event (encounter_id {}) at {}, {} passed to a closer worker.",
+                                      encounter_id, next_coord.lat, next_coord.lng)
                     # Let's try to find another location
                     return (None, True)
                 self._last_round_prio[origin] = True
                 self._positiontyp[origin] = 1
-                route_logger.info("Moving to {}, {} for a priority event", next_coord.lat,
-                                  next_coord.lng)
+                route_logger.info("Moving to {}, {} for a priority event (encounter_id {})", next_coord.lat,
+                                  next_coord.lng, encounter_id)
                 next_coord = self._check_coord_and_maybe_del(next_coord, origin)
                 if next_coord is None:
                     # Coord was not ok. Let's try to find another location.
