@@ -1,4 +1,4 @@
-from threading import Lock
+#from threading import Lock
 from typing import Optional
 
 from mapadroid.utils.collections import Location
@@ -9,11 +9,17 @@ from mapadroid.utils.madGlobals import (
     ScreenshotType, WebsocketWorkerConnectionClosedException,
     WebsocketWorkerTimeoutException)
 from mapadroid.websocket.AbstractCommunicator import AbstractCommunicator
-from mapadroid.websocket.WebsocketConnectedClientEntry import \
-    WebsocketConnectedClientEntry
+from mapadroid.websocket.RGCClientInfo import WebsocketConnectedClientEntry
 from mapadroid.worker.AbstractWorker import AbstractWorker
 
 logger = get_logger(LoggerEnums.websocket)
+
+# Fake locker, since we don't need locking
+class Lock:
+    def __enter__(self, *args, **kwargs):
+        pass
+    def __exit__(self, *args, **kwargs):
+        pass
 
 
 class Communicator(AbstractCommunicator):

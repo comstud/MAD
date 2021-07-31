@@ -19,7 +19,7 @@ from mapadroid.madmin.routes.statistics import MADminStatistics
 from mapadroid.utils import MappingManager
 from mapadroid.utils.logging import InterceptHandler, LoggerEnums, get_logger
 from mapadroid.utils.questGen import QuestGen
-from mapadroid.websocket.WebsocketServer import WebsocketServer
+from mapadroid.websocket.RGCCommunicator import WebsocketServer
 
 logger = get_logger(LoggerEnums.madmin)
 app = Flask(__name__,

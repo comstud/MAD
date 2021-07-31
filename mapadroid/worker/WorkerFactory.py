@@ -1,4 +1,4 @@
-import asyncio
+import time
 from typing import NamedTuple, Optional
 
 from mapadroid.db.DbWrapper import DbWrapper
@@ -36,7 +36,7 @@ class WorkerFactory:
         self.__pogo_windows: PogoWindows = pogo_windows
         self.__event = event
 
-    async def __get_walker_index(self, devicesettings, origin):
+    def __get_walker_index(self, devicesettings, origin):
         walker_index = devicesettings.get('walker_area_index', 0)
         origin_logger = get_origin_logger(logger, origin=origin)
         if walker_index > 0:
@@ -50,16 +50,16 @@ class WorkerFactory:
                 origin_logger.debug('Previous area was finished, move on')
         return walker_index
 
-    async def __initalize_devicesettings(self, origin):
+    def __initalize_devicesettings(self, origin):
         logger.debug("Initializing devicesettings")
         self.__mapping_manager.set_devicesetting_value_of(origin, 'walker_area_index', 0)
         self.__mapping_manager.set_devicesetting_value_of(origin, 'finished', False)
         self.__mapping_manager.set_devicesetting_value_of(origin, 'last_action_time', None)
         self.__mapping_manager.set_devicesetting_value_of(origin, 'last_cleanup_time', None)
         self.__mapping_manager.set_devicesetting_value_of(origin, 'job', False)
-        await asyncio.sleep(1)  # give the settings a moment... (dirty "workaround" against race condition)
+        time.sleep(1)
 
-    async def __get_walker_settings(self, origin: str, client_mapping: dict, devicesettings: dict) \
+    def __get_walker_settings(self, origin: str, client_mapping: dict, devicesettings: dict) \
             -> Optional[WalkerConfiguration]:
         origin_logger = get_origin_logger(logger, origin=origin)
         walker_area_array = client_mapping.get("walker", None)
@@ -68,8 +68,8 @@ class WorkerFactory:
             return None
 
         if devicesettings is not None and "walker_area_index" not in devicesettings:
-            await self.__initalize_devicesettings(origin)
-        walker_index = await self.__get_walker_index(devicesettings, origin)
+            self.__initalize_devicesettings(origin)
+        walker_index = self.__get_walker_index(devicesettings, origin)
 
         try:
             walker_settings: dict = walker_area_array[walker_index]
@@ -107,13 +107,13 @@ class WorkerFactory:
                                                    total_walkers_allowed_for_assigned_area=len(walker_area_array))
         return walker_configuration
 
-    async def __prep_settings(self, origin: str) -> Optional[WalkerConfiguration]:
+    def __prep_settings(self, origin: str) -> Optional[WalkerConfiguration]:
         origin_logger = get_origin_logger(logger, origin=origin)
         client_mapping = self.__mapping_manager.get_devicemappings_of(origin)
         devicesettings = self.__mapping_manager.get_devicesettings_of(origin)
         origin_logger.info("Setting up routemanagers")
 
-        walker_configuration: Optional[WalkerConfiguration] = await self.__get_walker_settings(origin, client_mapping,
+        walker_configuration: Optional[WalkerConfiguration] = self.__get_walker_settings(origin, client_mapping,
                                                                                                devicesettings)
         if walker_configuration is None:
             # logging is done in __get_walker_settings...
@@ -129,7 +129,7 @@ class WorkerFactory:
                            walker_configuration.total_walkers_allowed_for_assigned_area)
         return walker_configuration
 
-    async def __update_settings_of_origin(self, origin: str, walker_configuration: WalkerConfiguration):
+    def __update_settings_of_origin(self, origin: str, walker_configuration: WalkerConfiguration):
         self.__mapping_manager.set_devicesetting_value_of(origin, 'walker_area_index',
                                                           walker_configuration.walker_index + 1)
         self.__mapping_manager.set_devicesetting_value_of(origin, 'finished', False)
@@ -140,7 +140,7 @@ class WorkerFactory:
             # TODO: I hope this does not cause issues...
             self.__mapping_manager.set_devicesetting_value_of(origin, "last_location", Location(0.0, 0.0))
 
-    async def get_worker_using_settings(self, origin: str, enable_configmode: bool,
+    def get_worker_using_settings(self, origin: str, enable_configmode: bool,
                                         communicator: AbstractCommunicator) \
             -> Optional[AbstractWorker]:
         origin_logger = get_origin_logger(logger, origin=origin)
@@ -149,12 +149,12 @@ class WorkerFactory:
 
         # not a configmore worker, move on adjusting devicesettings etc
         # TODO: get worker
-        walker_configuration: Optional[WalkerConfiguration] = await self.__prep_settings(origin)
+        walker_configuration: Optional[WalkerConfiguration] = self.__prep_settings(origin)
         if walker_configuration is None:
             origin_logger.warning("Failed to find a walker configuration")
             return None
         origin_logger.debug("Setting up worker")
-        await self.__update_settings_of_origin(origin, walker_configuration)
+        self.__update_settings_of_origin(origin, walker_configuration)
 
         dev_id = self.__mapping_manager.get_all_devicemappings()[origin]['device_id']
         area_id = walker_configuration.walker_settings['walkerarea']
