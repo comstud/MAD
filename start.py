@@ -34,7 +34,7 @@ from mapadroid.utils.rarity import Rarity
 from mapadroid.utils.updater import DeviceUpdater
 from mapadroid.utils.walkerArgs import parse_args
 from mapadroid.webhook.webhookworker import WebhookWorker
-from mapadroid.websocket.WebsocketServer import WebsocketServer
+from mapadroid.websocket.RGCCommunicator import WebsocketServer
 
 py_version = sys.version_info
 if py_version.major < 3 or (py_version.major == 3 and py_version.minor < 6):

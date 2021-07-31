@@ -21,7 +21,7 @@ from mapadroid.utils.functions import (creation_date, generate_path,
 from mapadroid.utils.logging import LoggerEnums, get_logger, get_origin_logger
 from mapadroid.utils.madGlobals import ScreenshotType
 from mapadroid.utils.updater import JobType
-from mapadroid.websocket.WebsocketServer import WebsocketServer
+from mapadroid.websocket.RGCCommunicator import WebsocketServer
 
 logger = get_logger(LoggerEnums.madmin)
 

@@ -62,6 +62,8 @@ def parse_args():
                         help='Port of the websocket to listen on. Default: 8080')
     parser.add_argument('-wsct', '--websocket_command_timeout', required=False, type=int, default=30,
                         help='The max time to wait for a command to return (in seconds). Default: 30 seconds')
+    parser.add_argument('-rgcc', '--rgc_communicator_url', required=False, type=str, default='http://rgc-communicator:8079',
+                        help='The URL for rgc-communicator')
 
     # MITM Receiver (PD receiver)
     parser.add_argument('-mrip', '--mitmreceiver_ip', required=False, default="0.0.0.0", type=str,
