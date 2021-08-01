@@ -15,6 +15,7 @@ from mapadroid.utils.madGlobals import ScreenshotType
 
 logger = get_logger(LoggerEnums.ocr)
 
+LAST_LOADING_SCREEN_INFO = {"last_time": 0, "num_devices": 0}
 
 class LoginType(Enum):
     UNKNOWN = -1
@@ -392,8 +393,29 @@ class WordToScreenMatching(object):
         n_boxes = len(global_dict['text'])
         for i in range(n_boxes):
             if any(elem in (global_dict['text'][i]) for elem in click_text.split(",")):
-                self._click_center_button(diff, global_dict, i)
-                time.sleep(2)
+                self._click_signout(diff, global_dict, i)
+                return
+
+    def _click_signout(self, diff, global_dict, i) -> bool:
+        do_click = True
+        is_location_a = self.origin.startswith('DeviceA')
+        if is_location_a:
+            # LAST_LOADING_SCREEN_INFO = {"last_time": 0, "num_devices": 0}
+            li = LAST_LOADING_SCREEN_INFO
+            do_click = False
+            now = time.time()
+            if li['last_time'] + 600 < now:
+                li['num_devices'] = 1
+                li['last_time'] = now
+                do_click = True
+            elif li['num_devices'] < 6:
+                li['num_devices'] += 1
+                do_click = True
+        if do_click:
+            self._click_center_button(diff, global_dict, i)
+            time.sleep(2)
+            return True
+        return False
 
     def __handle_ptc_login(self) -> ScreenType:
         self._nextscreen = ScreenType.UNDEFINED
