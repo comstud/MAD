@@ -1,0 +1,25 @@
+version: "3.7"
+
+services:
+  mapadroid:
+    image: mapadroid
+    build:
+      context: ../.
+      dockerfile: docker/Dockerfile.nos
+    user: 1000:1000
+    volumes:
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /var/log/mad:/usr/src/app/logs
+      - /home/mad/src/MAD/configs:/usr/src/app/configs
+      - /home/mad/src/MAD/temp:/usr/src/app/temp
+      - /home/mad/src/MAD/files:/usr/src/app/files
+      - /home/mad/src/MAD/upload:/usr/src/app/upload
+      - /home/mad/src/MAD/plugins:/usr/src/app/plugins
+      - /home/mad/src/MAD/personal_commands:/usr/src/app/personal_commands
+      - /home/mad/src/MAD/update_log.json:/usr/src/app/update_log.json
+    ports:
+      - "10.0.55.23:5005:5005"
+      - "10.0.55.23:6001:6000"
+      - "0.0.0.0:7000:7000"
+    entrypoint: dumb-init -r 15:2 python3 -u ./start.py
