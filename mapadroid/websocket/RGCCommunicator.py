@@ -18,6 +18,7 @@ from mapadroid.utils.MappingManager import MappingManager
 from mapadroid.websocket.AbstractCommunicator import AbstractCommunicator
 from mapadroid.websocket.communicator import Communicator
 from mapadroid.websocket.RGCClientInfo import WebsocketConnectedClientEntry
+from mapadroid.websocket.RGCClientInfo import requests_session
 from mapadroid.worker.AbstractWorker import AbstractWorker
 from mapadroid.worker.WorkerFactory import WorkerFactory
 
@@ -28,7 +29,6 @@ logging.getLogger('websockets.protocol').addHandler(InterceptHandler(log_section
 
 
 logger = get_logger(LoggerEnums.websocket)
-
 
 class WebsocketServer(object):
     def __init__(self, args, mitm_mapper: MitmMapper, db_wrapper: DbWrapper, mapping_manager: MappingManager,
@@ -85,7 +85,7 @@ class WebsocketServer(object):
                 continue
             logger.debug('Polling for connected RGC devices..')
             try:
-                resp = requests.get(url, timeout=30)
+                resp = requests_session.get(url, timeout=30)
                 if resp.status_code != 200:
                     raise Exception('got status code %d' % resp.status_code)
                 resp = json.loads(resp.content)

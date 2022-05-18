@@ -11,6 +11,8 @@ from mapadroid.utils.madGlobals import (
     WebsocketWorkerTimeoutException)
 from mapadroid.worker.AbstractWorker import AbstractWorker
 
+requests_session = requests.Session()
+
 
 class WebsocketConnectedClientEntry:
     def __init__(self, origin: str, worker_thread: Optional[Thread], worker_instance: Optional[AbstractWorker],
@@ -41,7 +43,7 @@ class WebsocketConnectedClientEntry:
         self.logger.debug('sending command to url %s' % url)
         headers = {'Content-Type': ctype}
         try:
-            resp = requests.put(url, headers=headers, data=to_be_sent, timeout=timeout)
+            resp = requests_session.put(url, headers=headers, data=to_be_sent, timeout=timeout)
         except Exception as exc:
             self.logger.error('error waiting for RGC response from origin: %s' % exc)
             raise WebsocketWorkerTimeoutException
