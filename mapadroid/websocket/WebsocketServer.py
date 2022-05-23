@@ -302,7 +302,7 @@ class WebsocketServer(object):
             origin_logger.warning("No configuration has been defined.  Please define in MADmin and click "
                                   "'APPLY SETTINGS'")
             (origin, False)
-        elif origin not in self.__mapping_manager.get_all_devicemappings().keys():
+        elif not self.__mapping_manager.device_present(origin):
             if(self.__data_manager.search('device', params={'origin': origin})):
                 origin_logger.warning("Device is created but not loaded.  Click 'APPLY SETTINGS' in MADmin to Update")
             else:

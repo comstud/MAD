@@ -20,14 +20,14 @@ class ClusteringHelper:
         for event in queue:
             for other_event in queue:
                 if event[1].lat == other_event[1].lat and event[1].lng == other_event[1].lng and \
-                   event not in relations.keys():
+                    event not in relations:
                     relations[event] = []
                 distance = get_distance_of_two_points_in_meters(event[1].lat, event[1].lng,
                                                                 other_event[1].lat, other_event[1].lng)
                 # we will always build relations from the event at hand subtracted by the event inspected
                 timedelta = event[0] - other_event[0]
                 if 0 <= distance <= max_radius * 2 and 0 <= timedelta <= self.max_timedelta_seconds:
-                    if event not in relations.keys():
+                    if event not in relations:
                         relations[event] = []
                     # avoid duplicates
                     already_present = False
@@ -42,7 +42,7 @@ class ClusteringHelper:
 
     def _get_most_west_amongst_relations(self, relations):
         selected = list(relations.keys())[0]
-        for event in relations.keys():
+        for event in relations:
             if event[1].lng < selected[1].lng:
                 selected = event
             elif event[1].lng == selected[1].lng and event[1].lat > selected[1].lat:
