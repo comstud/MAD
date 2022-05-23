@@ -999,6 +999,12 @@ class WorkerBase(AbstractWorker):
         if screen is None:
             raise WebsocketWorkerRemovedException
         screen = screen.strip().split(' ')
+        try:
+            float(screen[0])
+            float(screen[1])
+        except ValueError:
+            self.logger.error('Invalid screen size received')
+            raise WebsocketWorkerRemovedException
         self._screen_x = screen[0]
         self._screen_y = screen[1]
         x_offset = self.get_devicesettings_value("screenshot_x_offset", 0)
