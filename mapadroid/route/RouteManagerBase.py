@@ -809,7 +809,7 @@ class RouteManagerBase(ABC):
         route_logger.debug("distance to PrioQ {}: {}", prioqcoord, distance_worker)
         temp_distance = distance_worker
 
-        for worker in self._routepool.keys():
+        for worker in self._routepool:
             if worker == origin or self._routepool[worker].has_prio_event:
                 continue
             worker_pos = self._routepool[worker].current_pos

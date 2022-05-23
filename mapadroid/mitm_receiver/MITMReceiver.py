@@ -26,6 +26,7 @@ from mapadroid.utils.logging import (LoggerEnums, LogLevelChanger, get_logger,
 logger = get_logger(LoggerEnums.mitm)
 app = Flask(__name__)
 
+INTERESTING_PROTOS = set([106, 102, 101, 104, 4, 156, 145])
 
 def validate_accepted(func) -> Any:
     @wraps(func)
@@ -116,8 +117,7 @@ class EndpointAction(object):
                 origin_logger.warning("Missing Origin header in request")
                 self.response = Response(status=500, headers={})
                 abort = True
-            elif self.mapping_manager.get_all_devicemappings().keys() is not None and \
-                    origin not in self.mapping_manager.get_all_devicemappings().keys():
+            elif not self.mapping_manager.device_present(origin):
                 origin_logger.warning("MITMReceiver request without Origin or disallowed Origin")
                 self.response = Response(status=403, headers={})
                 abort = True
@@ -277,7 +277,7 @@ class MITMReceiver(Process):
             origin_logger.warning("Could not read method ID. Stopping processing of proto")
             return
 
-        if proto_type not in (106, 102, 101, 104, 4, 156, 145):
+        if proto_type not in INTERESTING_PROTOS:
             # trash protos - ignoring
             return
 
@@ -289,9 +289,13 @@ class MITMReceiver(Process):
         if (location_of_data.lat > 90 or location_of_data.lat < -90 or
                 location_of_data.lng > 180 or location_of_data.lng < -180):
             location_of_data: Location = Location(0, 0)
-        self.__mitm_mapper.update_latest(origin, timestamp_received_raw=timestamp,
-                                         timestamp_received_receiver=time.time(), key=proto_type, values_dict=data,
-                                         location=location_of_data)
+        self.__mitm_mapper.update_latest_proto(
+            origin,
+            timestamp,
+            location_of_data,
+            proto_type,
+            data,
+        )
         origin_logger.debug2("Placing data received to data_queue")
         self._add_to_queue((timestamp, data, origin))
 
@@ -349,7 +353,7 @@ class MITMReceiver(Process):
     def status(self, origin, data):
         origin_return: dict = {}
         data_return: dict = {}
-        for origin in self.__mapping_manager.get_all_devicemappings().keys():
+        for origin in self.__mapping_manager.get_all_devicemappings():
             origin_return[origin] = {}
             origin_return[origin]['injection_status'] = self.__mitm_mapper.get_injection_status(origin)
             origin_return[origin]['latest_data'] = self.__mitm_mapper.request_latest(origin,

@@ -347,7 +347,7 @@ def get_local_versions():
         "64": [],
     }
     local_supported = get_version_codes()
-    for composite_ver in local_supported.keys():
+    for composite_ver in local_supported:
         version, arch = composite_ver.split("_", 1)
         supported[arch].append(version)
     if any(supported["32"]) or any(supported["64"]):

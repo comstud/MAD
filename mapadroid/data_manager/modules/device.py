@@ -390,7 +390,7 @@ class Device(Resource):
                 field: data[field]
             }
             in_use = self._data_manager.search('device', params=search)
-            for dev_id in in_use.keys():
+            for dev_id in in_use:
                 if dev_id != self.identifier:
                     bad_macs.append((field, 'MAC in use'))
         if bad_macs:

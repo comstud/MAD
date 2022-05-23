@@ -144,8 +144,8 @@ class WorkerMITM(MITMBase):
             if encounter_ids:
                 self.logger.debug("Found {} new encounter_ids", len(encounter_ids))
             self._encounter_ids = {**encounter_ids, **self._encounter_ids}
-            # allow one minute extra life time, because the clock on some devices differs, newer got why this problem
-            # apears but it is a fact.
+            # allow one minute extra life time, because the clock on some devices differs. Never got why this problem
+            # apears, but it is a fact.
             max_age = time.time() - 60
 
             remove_time = time.time()
@@ -162,10 +162,15 @@ class WorkerMITM(MITMBase):
             # TODO: here we have the latest update of encountered mons.
             # self._encounter_ids contains the complete dict.
             # encounter_ids only contains the newest update.
-        self._mitm_mapper.update_latest(origin=self._origin, key="ids_encountered", values_dict=self._encounter_ids)
-        self._mitm_mapper.update_latest(origin=self._origin, key="ids_iv", values_dict=ids_iv)
-        self._mitm_mapper.update_latest(origin=self._origin, key="unquest_stops", values_dict=self.unquestStops)
-        self._mitm_mapper.update_latest(origin=self._origin, key="injected_settings", values_dict=injected_settings)
+        self._mitm_mapper.update_injection_keys(
+                self._origin,
+                {
+                    'ids_encountered': self._encounter_ids,
+                    'ids_iv': ids_iv,
+                    'unquest_stops': self.unquestStops,
+                    'injected_settings': injected_settings,
+                },
+        )
 
     def _check_for_data_content(self, latest_data, proto_to_wait_for: ProtoIdentifier, timestamp: float) \
             -> Tuple[LatestReceivedType, Optional[object]]:

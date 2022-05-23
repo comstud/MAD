@@ -453,10 +453,14 @@ class WorkerQuests(MITMBase):
         injected_settings["scanmode"] = scanmode
         ids_iv: List[int] = []
         self._encounter_ids = {}
-        self._mitm_mapper.update_latest(origin=self._origin, key="ids_encountered", values_dict=self._encounter_ids)
-        self._mitm_mapper.update_latest(origin=self._origin, key="ids_iv", values_dict=ids_iv)
-
-        self._mitm_mapper.update_latest(origin=self._origin, key="injected_settings", values_dict=injected_settings)
+        self._mitm_mapper.update_injection_keys(
+            self._origin,
+            {
+                'ids_encountered': self._encounter_ids,
+                'ids_iv': ids_iv,
+                'injected_settings': injected_settings,
+            },
+        )
 
     def _directly_surrounding_gmo_cells_containing_stops_around_current_position(self, gmo_cells) -> List:
         """
@@ -917,7 +921,7 @@ class WorkerQuests(MITMBase):
                     self._db_wrapper.update_pokestop_location(fort_id, latitude, longitude)
 
         timedelta_to_consider_deletion = timedelta(days=3)
-        for fort_id in stops.keys():
+        for fort_id in stops:
             # Call delete of stops that have been not been found within 100m range of current position
             stop_location_known, last_updated = stops[fort_id]
             self.logger.debug("Considering stop {} at {} (last updated {}) for deletion",

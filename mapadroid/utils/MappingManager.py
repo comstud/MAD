@@ -114,7 +114,7 @@ class MappingManager:
         return self._devicemappings.get(device_name, None)
 
     def get_devicesettings_of(self, device_name: str) -> Optional[dict]:
-        return self._devicemappings.get(device_name, None).get('settings', None)
+        return self._devicemappings.get(device_name, {}).get('settings', None)
 
     def __devicesettings_setter_consumer(self):
         logger.info("Starting Devicesettings consumer Thread")
@@ -122,7 +122,7 @@ class MappingManager:
             try:
                 set_settings = self.__devicesettings_setter_queue.get_nowait()
             except Empty:
-                time.sleep(0.2)
+                time.sleep(0.5)
                 continue
             except (EOFError, KeyboardInterrupt):
                 logger.info("Devicesettings setter thread noticed shutdown")
@@ -142,6 +142,9 @@ class MappingManager:
 
     def get_all_devicemappings(self) -> Optional[dict]:
         return self._devicemappings
+
+    def device_present(self, origin: str) -> bool:
+        return origin in self._devicemappings
 
     def get_areas(self) -> Optional[dict]:
         return self._areas
@@ -165,7 +168,7 @@ class MappingManager:
 
     def routemanager_present(self, routemanager_name: str) -> bool:
         with self.__mappings_mutex:
-            return routemanager_name in self._routemanagers.keys()
+            return routemanager_name in self._routemanagers
 
     def routemanager_get_next_location(self, routemanager_name: str, origin: str) -> Optional[Location]:
         routemanager = self.__fetch_routemanager(routemanager_name)
@@ -449,7 +452,7 @@ class MappingManager:
             area_dict["routemanager"] = route_manager
             areas[area_id] = area_dict
 
-        for area in areas_procs.keys():
+        for area in areas_procs:
             to_be_checked = areas_procs[area]
             to_be_checked.get()
 
