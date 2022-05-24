@@ -227,7 +227,7 @@ class DbWrapper:
             "latitude >= %s AND longitude >= %s AND "
             "latitude <= %s AND longitude <= %s AND "
             "cp IS NOT NULL AND "
-            "disappear_time > UTC_TIMESTAMP() - INTERVAL 1 HOUR AND "
+            "disappear_time > UTC_TIMESTAMP() AND "
             "last_modified > FROM_UNIXTIME(%s) "
         )
 
