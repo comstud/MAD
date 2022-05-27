@@ -187,32 +187,6 @@ class WorkerConfigmode(AbstractWorker):
 
         return reached_raidtab
 
-    def _wait_for_injection(self):
-        self._not_injected_count = 0
-        reboot = self.get_devicesettings_value('reboot', True)
-        injection_thresh_reboot = 'Unlimited'
-        if reboot:
-            injection_thresh_reboot = int(self.get_devicesettings_value("injection_thresh_reboot", 20))
-        while not self._mitm_mapper.get_injection_status(self._origin):
-            if reboot and self._not_injected_count >= injection_thresh_reboot:
-                self.logger.error("Not injected in time - reboot")
-                self._reboot()
-                return False
-            self.logger.info("Didn't receive any data yet. (Retry count: {}/{})", str(self._not_injected_count),
-                             str(injection_thresh_reboot))
-            if self._stop_worker_event.isSet():
-                self.logger.error("Killed while waiting for injection")
-                return False
-            self._not_injected_count += 1
-            wait_time = 0
-            while wait_time < 20:
-                wait_time += 1
-                if self._stop_worker_event.isSet():
-                    self.logger.error("Worker get killed while waiting for injection")
-                    return False
-                time.sleep(1)
-        return True
-
     def _reboot(self):
         if not self.get_devicesettings_value("reboot", True):
             self.logger.warning("Reboot command to be issued to device but reboot is disabled. Skipping reboot")
