@@ -64,6 +64,10 @@ def parse_args():
                         help='The max time to wait for a command to return (in seconds). Default: 30 seconds')
     parser.add_argument('-rgcc', '--rgc_communicator_url', required=False, type=str, default='http://rgc-communicator:8079',
                         help='The URL for rgc-communicator')
+    parser.add_argument('-mitmc', '--mitm_communicator_url', required=False, type=str, default='http://mitm-communicator:8081',
+                        help='The URL for mitm-communicator')
+    parser.add_argument('-umitm', '--use_mitm_communicator', required=False, type=bool, default=False,
+                        help='Enable use of mitm-communicator')
 
     # MITM Receiver (PD receiver)
     parser.add_argument('-mrip', '--mitmreceiver_ip', required=False, default="0.0.0.0", type=str,

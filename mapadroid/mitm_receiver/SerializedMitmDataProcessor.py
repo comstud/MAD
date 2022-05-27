@@ -7,6 +7,7 @@ from mapadroid.db.DbWrapper import DbWrapper
 from mapadroid.mitm_receiver.MitmMapper import MitmMapper
 from mapadroid.utils.logging import LoggerEnums, get_logger, get_origin_logger
 from mapadroid.utils.questGen import QuestGen
+from mapadroid import mitm_client
 
 logger = get_logger(LoggerEnums.mitm)
 
@@ -24,6 +25,9 @@ class SerializedMitmDataProcessor(Process):
 
     def run(self):
         logger.info("Starting serialized MITM data processor")
+        if self.__application_args.use_mitm_communicator:
+            self._mitm_comm_run()
+            return
         while True:
             try:
                 start_time = self.get_time_ms()
@@ -38,6 +42,34 @@ class SerializedMitmDataProcessor(Process):
             except KeyboardInterrupt:
                 logger.info("Received keyboard interrupt, stopping MITM data processor")
                 break
+
+    def _mitm_comm_run(self):
+        client = mitm_client.MITMClient(self.__application_args.mitm_communicator_url)
+        start_time = time.time()
+        drop_before_start = self.__application_args.mitm_ignore_pre_boot is True
+        try:
+            while True:
+                try:
+                    protos = client.get_protos_to_process()
+                except mitm_client.MITMCommunicationError as exc:
+                    logger.info('could not talk to mitm-communicator (will retry): {}', exc)
+                    protos = []
+                if len(protos) == 0:
+                    time.sleep(1)
+                    continue
+                for proto in protos:
+                    timestamp = proto['timestamp']
+                    if drop_before_start and timestamp < start_time:
+                        continue
+                    origin = proto.pop('origin')
+                    start_time = self.get_time_ms()
+                    self.process_data(timestamp, proto, origin)
+                    end_time = self.get_time_ms() - start_time
+                    logger.debug('MITM data processor {} finished queue item in {}ms', self.__name, end_time)
+        except KeyboardInterrupt:
+            logger.info('Received keyboard interrupt, stopping MITM data processor')
+        except Exception as exc:
+            logger.info('MITM received unexpected exception, stopping: {}', exc)
 
     @logger.catch
     def process_data(self, received_timestamp, data, origin):

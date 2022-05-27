@@ -172,6 +172,7 @@ class MitmMapper(object):
                 origin_logger.debug2("Done updating injection key {}", key)
             return True
 
+    # NOTE(comstud): not used for mitm-receiver mode
     def update_latest_proto(self, origin: str, timestamp: float, location: Location, proto_num: int, values_dict):
         origin_logger = get_origin_logger(logger, origin=origin)
         origin_logger.debug2("Trying to acquire lock to update proto {}", proto_num)
@@ -189,12 +190,14 @@ class MitmMapper(object):
             origin_logger.debug2("Done updating proto {}", proto_num)
             return True
 
+    # NOTE(comstud): not used for mitm-receiver mode
     def set_injection_status(self, origin, status=True):
         origin_logger = get_origin_logger(logger, origin=origin)
         if origin not in self.__injected or not self.__injected[origin] and status is True:
             origin_logger.success("Worker is injected now")
         self.__injected[origin] = status
 
+    # NOTE(comstud): not used for mitm-receiver mode
     def get_injection_status(self, origin):
         return self.__injected.get(origin, False)
 

@@ -2,6 +2,7 @@ import json
 import logging
 import queue
 import requests
+import requests.exceptions
 import threading
 import time
 from typing import Coroutine, Dict, List, Optional, Set
@@ -107,7 +108,8 @@ class WebsocketServer(object):
                     # we ignore gone devices, as communicator will return errors
                     # to the worker.. and the worker will shut down. We catch those
                     # above.
-
+            except requests.exceptions.ConnectionError as exc:
+                logger.error('Polling for connected RGC devices failed: RGC communicator not running')
             except Exception as exc:
                 logger.exception('Polling for connected RGC devices failed: %s' % exc)
 

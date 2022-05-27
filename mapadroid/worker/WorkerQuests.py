@@ -496,12 +496,11 @@ class WorkerQuests(MITMBase):
         return cells_with_forts
 
     def _current_position_has_spinnable_stop(self, timestamp: float) -> PositionStopType:
-        type_received, data_received = self._wait_for_data(timestamp=timestamp, proto_to_wait_for=ProtoIdentifier.GMO)
-        if type_received != LatestReceivedType.GMO or data_received is None:
+        type_received, proto_entry = self._wait_for_data(timestamp=timestamp, proto_to_wait_for=ProtoIdentifier.GMO)
+        if type_received != LatestReceivedType.GMO or proto_entry is None:
             self._spinnable_data_failure()
             return PositionStopType.GMO_NOT_AVAILABLE
-        latest_proto = data_received.get("payload")
-        gmo_cells: list = latest_proto.get("cells", None)
+        gmo_cells: list = proto_entry.get("cells", None)
 
         if not gmo_cells:
             self.logger.warning("Can't spin stop - no map info in GMO!")
@@ -781,18 +780,41 @@ class WorkerQuests(MITMBase):
             -> Tuple[LatestReceivedType, Optional[Union[dict, FortSearchResultTypes]]]:
         type_of_data_found: LatestReceivedType = LatestReceivedType.UNDEFINED
         data_found: Optional[object] = None
-        # Check if we have clicked a gym or mon...
-        if ProtoIdentifier.GYM_INFO.value in latest \
-                and latest[ProtoIdentifier.GYM_INFO.value].get('timestamp', 0) >= timestamp:
-            type_of_data_found = LatestReceivedType.GYM
-            return type_of_data_found, data_found
-        elif ProtoIdentifier.ENCOUNTER.value in latest \
-                and latest[ProtoIdentifier.ENCOUNTER.value].get('timestamp', 0) >= timestamp:
-            type_of_data_found = LatestReceivedType.MON
-            return type_of_data_found, data_found
-        elif proto_to_wait_for.value not in latest:
-            self.logger.debug("No data linked to the requested proto since MAD started.")
-            return type_of_data_found, data_found
+
+        if self._application_args.use_mitm_communicator:
+            gym_proto = latest.get_latest_proto(ProtoIdentifier.GYM_INFO.value)
+            if gym_proto is not None and gym_proto.timestamp >= timestamp:
+                return LatestReceivedType.GYM, data_found
+            # NOTE(comstud): mons are hidden on map screen now, so this should not be possible:
+            encounter_proto = latest.get_latest_proto(ProtoIdentifier.ENCOUNTER.value)
+            if encounter_proto is not None and encounter_proto.timestamp >= timestamp:
+                return LatestReceivedType.MON, data_found
+            latest_proto_entry = latest.get_latest_proto(proto_to_wait_for.value)
+            timestamp_of_proto = latest_proto_entry.timestamp
+            latest_proto = latest_proto_entry.payload
+            self.logger.debug4("Latest data received: {}", latest_proto_entry)
+        else:
+            # Check if we have clicked a gym or mon...
+            if ProtoIdentifier.GYM_INFO.value in latest \
+                    and latest[ProtoIdentifier.GYM_INFO.value].get('timestamp', 0) >= timestamp:
+                type_of_data_found = LatestReceivedType.GYM
+                return type_of_data_found, data_found
+            elif ProtoIdentifier.ENCOUNTER.value in latest \
+                    and latest[ProtoIdentifier.ENCOUNTER.value].get('timestamp', 0) >= timestamp:
+                type_of_data_found = LatestReceivedType.MON
+                return type_of_data_found, data_found
+            elif proto_to_wait_for.value not in latest:
+                # NOTE(comstud): not possible to get here.
+                self.logger.debug("No data linked to the requested proto since MAD started.")
+                return type_of_data_found, data_found
+            latest_proto_entry = latest.get(proto_to_wait_for.value)
+            timestamp_of_proto = latest_proto_entry.get("timestamp", 0)
+            # TODO: consider reseting timestamp here since we clearly received SOMETHING
+            latest_proto_data = latest_proto_entry.get("values", None)
+            self.logger.debug4("Latest data received: {}", latest_proto_data)
+            if latest_proto_data is None:
+                return type_of_data_found, data_found
+            latest_proto = latest_proto_data.get("payload", None)
 
         # when waiting for stop or spin data, it is enough to make sure
         # our data is newer than the latest of last quest received, last
@@ -811,12 +833,8 @@ class WorkerQuests(MITMBase):
                               datetime.fromtimestamp(replacement).strftime('%H:%M:%S'),
                               proto_to_wait_for)
             timestamp = replacement
+
         # proto has previously been received, let's check the timestamp...
-        latest_proto_entry = latest.get(proto_to_wait_for.value, None)
-        if not latest_proto_entry:
-            self.logger.debug("No data linked to the requested proto since MAD started.")
-            return type_of_data_found, data_found
-        timestamp_of_proto = latest_proto_entry.get("timestamp", 0)
         if timestamp_of_proto < timestamp:
             self.logger.debug("latest timestamp of proto {} ({}) is older than {}", proto_to_wait_for,
                               timestamp_of_proto, timestamp)
@@ -825,11 +843,6 @@ class WorkerQuests(MITMBase):
             return type_of_data_found, data_found
 
         # TODO: consider reseting timestamp here since we clearly received SOMETHING
-        latest_proto_data = latest_proto_entry.get("values", None)
-        self.logger.debug4("Latest data received: {}", latest_proto_data)
-        if latest_proto_data is None:
-            return type_of_data_found, data_found
-        latest_proto = latest_proto_data.get("payload", None)
         self.logger.debug2("Checking for Quest related data in proto {}", proto_to_wait_for)
         if latest_proto is None:
             self.logger.debug("No proto data for {} at {} after {}", proto_to_wait_for,
@@ -860,7 +873,7 @@ class WorkerQuests(MITMBase):
         elif proto_to_wait_for == ProtoIdentifier.GMO \
                 and self._directly_surrounding_gmo_cells_containing_stops_around_current_position(
                     latest_proto.get("cells")):
-            data_found = latest_proto_data
+            data_found = latest_proto
             type_of_data_found = LatestReceivedType.GMO
         elif proto_to_wait_for == ProtoIdentifier.INVENTORY and 'inventory_delta' in latest_proto and \
                 len(latest_proto['inventory_delta']['inventory_items']) > 0:

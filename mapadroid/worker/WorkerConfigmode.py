@@ -137,7 +137,7 @@ class WorkerConfigmode(AbstractWorker):
                 self.logger.debug("Setting device to idle for routemanager")
                 self._db_wrapper.save_idle_status(self._dev_id, True)
                 self.logger.debug("Device set to idle for routemanager")
-            while check_walker_value_type(sleeptime) and not self._stop_worker_event.isSet():
+            while check_walker_value_type(sleeptime) and not self._stop_worker_event.is_set():
                 time.sleep(1)
             self.logger.info('just woke up')
             if killpogo:
@@ -177,7 +177,8 @@ class WorkerConfigmode(AbstractWorker):
             time.sleep(self.get_devicesettings_value("post_turn_screen_on_delay", 7))
 
         while not pogo_topmost:
-            self._mitm_mapper.set_injection_status(self._origin, False)
+            if not self._args.use_mitm_communicator:
+                self._mitm_mapper.set_injection_status(self._origin, False)
             self._communicator.start_app("com.nianticlabs.pokemongo")
             time.sleep(1)
             self._communicator.is_pogo_topmost()

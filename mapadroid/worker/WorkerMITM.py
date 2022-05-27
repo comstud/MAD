@@ -174,16 +174,19 @@ class WorkerMITM(MITMBase):
 
     def _check_for_data_content(self, latest_data, proto_to_wait_for: ProtoIdentifier, timestamp: float) \
             -> Tuple[LatestReceivedType, Optional[object]]:
-        type_of_data_found: LatestReceivedType = LatestReceivedType.UNDEFINED
-        data_found: Optional[object] = None
-        latest_proto_entry = latest_data.get(proto_to_wait_for.value, None)
-        if not latest_proto_entry:
-            self.logger.debug("No data linked to the requested proto since MAD started.")
-            return type_of_data_found, data_found
-
         # proto has previously been received, let's check the timestamp...
         mode = self._mapping_manager.routemanager_get_mode(self._routemanager_name)
-        timestamp_of_proto: float = latest_proto_entry.get("timestamp", None)
+        if self._application_args.use_mitm_communicator:
+            latest_proto_entry = latest_data.get_latest_proto(proto_to_wait_for.value)
+            timestamp_of_proto: float = latest_proto_entry.timestamp
+            payload = latest_proto_entry.payload
+        else:
+            latest_proto_entry = latest_data.get(proto_to_wait_for.value)
+            timestamp_of_proto: float = latest_proto_entry.get("timestamp", None)
+            latest_proto_data: dict = latest_proto_entry.get("values", None)
+            if latest_proto_data is None:
+                return LatestReceivedType.UNDEFINED, data_found
+            payload = latest_proto_data.get("payload")
         self.logger.debug("Latest timestamp: {} vs. timestamp waited for: {} of proto {}",
                           datetime.fromtimestamp(timestamp_of_proto), datetime.fromtimestamp(timestamp),
                           proto_to_wait_for)
@@ -192,22 +195,15 @@ class WorkerMITM(MITMBase):
                               timestamp_of_proto, timestamp)
             # TODO: timeout error instead of data_error_counter? Differentiate timeout vs missing data (the
             # TODO: latter indicates too high speeds for example
-            return type_of_data_found, data_found
-
-        latest_proto_data: dict = latest_proto_entry.get("values", None)
-        if latest_proto_data is None:
-            return LatestReceivedType.UNDEFINED, data_found
-        latest_proto = latest_proto_data.get("payload")
+            return LatestReceivedType.UNDEFINED, None
 
         if mode in ["mon_mitm", "iv_mitm"]:
             key_to_check = "wild_pokemon"
         else:
             key_to_check = "forts"
 
-        if self._gmo_cells_contain_multiple_of_key(latest_proto, key_to_check):
-            data_found = latest_proto
-            type_of_data_found = LatestReceivedType.GMO
-        else:
-            self.logger.debug("{} not in GMO", key_to_check)
-
-        return type_of_data_found, data_found
+        if self._gmo_cells_contain_multiple_of_key(payload, key_to_check):
+            # proto_to_wait_for should always be GMO
+            return LatestReceivedType.GMO, payload
+        self.logger.debug("{} not in GMO", key_to_check)
+        return LatestReceivedType.UNDEFINED, None

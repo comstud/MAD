@@ -6,6 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, Tuple, Union
 
+from mapadroid import mitm_client
 from mapadroid.mitm_receiver.MitmMapper import MitmMapper
 from mapadroid.ocr.pogoWindows import PogoWindows
 from mapadroid.utils import MappingManager
@@ -69,6 +70,7 @@ class MITMBase(WorkerBase):
                                                      self._routemanager_name),
                                                  99)
         self._enhanced_mode = self.get_devicesettings_value('enhanced_mode_quest', False)
+        self._mitm_client = mitm_client.MITMClient(args.mitm_communicator_url)
 
     def _walk_after_teleport(self, walk_distance_post_teleport) -> float:
         """
@@ -103,6 +105,8 @@ class MITMBase(WorkerBase):
     def _wait_for_data(self, timestamp: float = None,
                        proto_to_wait_for: ProtoIdentifier = ProtoIdentifier.GMO, timeout=None) \
             -> Tuple[LatestReceivedType, Optional[Union[dict, FortSearchResultTypes]]]:
+        if self._application_args.use_mitm_communicator:
+            return self._mitm_wait_for_data(timestamp, proto_to_wait_for, timeout)
         if timestamp is None:
             timestamp = time.time()
         # Cut off decimal places of timestamp as PD also does that...
@@ -193,6 +197,65 @@ class MITMBase(WorkerBase):
         self.worker_stats()
         return type_of_data_returned, data
 
+    def _should_check_latest_data_content(self, latest_info, proto_id: ProtoIdentifier) -> bool:
+        if latest_info is None:
+            self.logger.info('No data received from MITM yet')
+            return False
+        proto_location = latest_info.location
+        if proto_location is None:
+            self.logger.debug('Not at a valid location, yet')
+            return False
+        proto = latest_info.get_latest_proto(proto_id.value)
+        if proto is None:
+            self.logger.info('Proto %s not received from MITM yet' % proto_id)
+            return False
+        # NOTE(comstud): I think this checked the latest location of ANY received proto before, but I
+        # think it makes sense to check the actual location of the most recent GMO:
+        if proto_id == ProtoIdentifier.GMO and not self._is_location_within_allowed_range(proto.location):
+            return False
+        return True
+
+    def _mitm_wait_for_data(self, timestamp: float = None,
+                       proto_to_wait_for: ProtoIdentifier = ProtoIdentifier.GMO, timeout=None) \
+            -> Tuple[LatestReceivedType, Optional[Union[dict, FortSearchResultTypes]]]:
+        if timestamp is None:
+            timestamp = time.time()
+        if timeout is None:
+            timeout = self.get_devicesettings_value("mitm_wait_timeout", FALLBACK_MITM_WAIT_TIMEOUT)
+        end_time = timestamp + timeout
+
+        proto_id = LatestReceivedType.UNDEFINED
+        data = None
+        self.logger.info('Waiting for data after {}', datetime.fromtimestamp(timestamp))
+        while time.time() < end_time:
+            if self._stop_worker_event.is_set():
+                raise InternalStopWorkerException
+            latest_info = None
+            try:
+                latest_info = self._mitm_client.get_latest_info(origin=self._origin, include_protos=True)
+            except mitm_client.MITMOriginNotFound:
+                self.logger.info('failed getting latest origin info from mitm-communicator: unknown origin')
+            except mitm_client.MITMCommunicationError as exc:
+                self.logger.info('failed getting latest origin info from mitm-communicator: {}', exc)
+
+            if self._should_check_latest_data_content(latest_info, proto_to_wait_for):
+                proto_id, data = self._check_for_data_content(latest_info, proto_to_wait_for, timestamp)
+            self.raise_stop_worker_if_applicable()
+            if proto_id != LatestReceivedType.UNDEFINED:
+                break
+            self.logger.debug('Still waiting for data. Will sleep for {}', WAIT_FOR_DATA_NEXT_ROUND_SLEEP)
+            time.sleep(WAIT_FOR_DATA_NEXT_ROUND_SLEEP)
+
+        position_type = self._mapping_manager.routemanager_get_position_type(self._routemanager_name,
+                                                                             self._origin)
+        if data is None:
+            self._handle_proto_timeout(position_type, proto_to_wait_for, proto_id)
+        else:
+            self._reset_restart_count_and_collect_stats(position_type)
+
+        self.worker_stats()
+        return proto_id, data
+
     def _handle_proto_timeout(self, position_type, proto_to_wait_for: ProtoIdentifier, type_of_data_returned):
         self.logger.info("Timeout waiting for useful data. Type requested was {}, received {}",
                          proto_to_wait_for, type_of_data_returned)
@@ -254,6 +317,8 @@ class MITMBase(WorkerBase):
                            self._origin,
                            self.current_location,
                            latest_location)
+        if latest_location is None:
+            return False
         distance_to_data = get_distance_of_two_points_in_meters(float(latest_location.lat),
                                                                 float(latest_location.lng),
                                                                 float(self.current_location.lat),
@@ -274,7 +339,8 @@ class MITMBase(WorkerBase):
         pogo_topmost = self._communicator.is_pogo_topmost()
         if pogo_topmost:
             return True
-        self._mitm_mapper.set_injection_status(self._origin, False)
+        if not self._application_args.use_mitm_communicator:
+            self._mitm_mapper.set_injection_status(self._origin, False)
         started_pogo: bool = WorkerBase._start_pogo(self)
         if not self._wait_for_injection() or self._stop_worker_event.is_set():
             raise InternalStopWorkerException
@@ -288,7 +354,22 @@ class MITMBase(WorkerBase):
         if reboot:
             injection_thresh_reboot = int(self.get_devicesettings_value("injection_thresh_reboot", 20))
         window_check_frequency = 3
-        while not self._mitm_mapper.get_injection_status(self._origin):
+
+        injection_start_time = time.time()
+        while True:
+            if self._application_args.use_mitm_communicator:
+                try:
+                    info = self._mitm_client.get_latest_info(origin=self._origin)
+                    if info.mitm_received_ts > injection_start_time:
+                        break
+                except mitm_client.MITMOriginNotFound:
+                    self.logger.info('failed getting latest origin info from mitm-communicator: unknown origin')
+                except mitm_client.MITMCommunicationError as exc:
+                    self.logger.info('failed getting latest origin info from mitm-communicator: {}', exc)
+            else:
+                if self._mitm_mapper.get_injection_status(self._origin):
+                    break
+
             self._check_for_mad_job()
             if reboot and self._not_injected_count >= injection_thresh_reboot:
                 self.logger.warning("Not injected in time - reboot")

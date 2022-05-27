@@ -255,6 +255,9 @@ class MITMReceiver(Process):
 
     def proto_endpoint(self, origin: str, data: Union[dict, list]):
         origin_logger = get_origin_logger(logger, origin=origin)
+        if self.__application_args.use_mitm_communicator:
+            origin_logger.warning("Unexpectedly received proto")
+            return
         origin_logger.debug2("Receiving proto")
         origin_logger.debug4("Proto data received {}", data)
 
@@ -355,9 +358,16 @@ class MITMReceiver(Process):
         data_return: dict = {}
         for origin in self.__mapping_manager.get_all_devicemappings():
             origin_return[origin] = {}
-            origin_return[origin]['injection_status'] = self.__mitm_mapper.get_injection_status(origin)
-            origin_return[origin]['latest_data'] = self.__mitm_mapper.request_latest(origin,
-                                                                                     'timestamp_last_data')
+            if self.__application_args.use_mitm_communicator:
+                # FIXME(cjb): we don't have the injection_status or latest_data timestamp here anymore..
+                # so just fudge this. I don't see the purpose of this route. I haven't seen any requests
+                # to it from PD... I am guessing it is not used anymore.
+                origin_return[origin]['injection_status'] = True
+                origin_return[origin]['latest_data'] = int(time.time())
+            else:
+                origin_return[origin]['injection_status'] = self.__mitm_mapper.get_injection_status(origin)
+                origin_return[origin]['latest_data'] = self.__mitm_mapper.request_latest(origin,
+                                                                                         'timestamp_last_data')
             origin_return[origin]['mode_value'] = self.__mitm_mapper.request_latest(origin,
                                                                                     'injected_settings')
             origin_return[origin][

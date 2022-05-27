@@ -1,5 +1,6 @@
 import math
 import requests
+import requests.exceptions
 import time
 from threading import Thread
 from typing import Optional
@@ -44,6 +45,9 @@ class WebsocketConnectedClientEntry:
         headers = {'Content-Type': ctype}
         try:
             resp = requests_session.put(url, headers=headers, data=to_be_sent, timeout=timeout)
+        except requests.exceptions.ConnectionError as exc:
+            self.logger.error('error sending command to RGC: RGC communicator is not running')
+            raise WebsocketWorkerTimeoutException
         except Exception as exc:
             self.logger.error('error waiting for RGC response from origin: %s' % exc)
             raise WebsocketWorkerTimeoutException
