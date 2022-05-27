@@ -52,7 +52,7 @@ class WorkerBase(AbstractWorker):
         self._dev_id: int = dev_id
         self._event = event
         self._origin: str = origin
-        self._applicationArgs = args
+        self._application_args = args
         self._last_known_state = last_known_state
         self._work_mutex = Lock()
         self.loop = None
@@ -98,7 +98,7 @@ class WorkerBase(AbstractWorker):
         self._WordToScreenMatching = WordToScreenMatching(self._communicator, self._pogoWindowManager,
                                                           self._origin,
                                                           self._resocalc, mapping_manager,
-                                                          self._applicationArgs)
+                                                          self._application_args)
 
     def set_devicesettings_value(self, key: str, value):
         self._mapping_manager.set_devicesetting_value_of(self._origin, key, value)
@@ -130,7 +130,7 @@ class WorkerBase(AbstractWorker):
             self.logger.info("Creating debugscreen: {}", screenshot_filename)
 
         return os.path.join(
-            self._applicationArgs.temp_path, screenshot_filename)
+            self._application_args.temp_path, screenshot_filename)
 
     def check_max_walkers_reached(self):
         walkermax = self._walker.get('walkermax', False)
@@ -454,7 +454,7 @@ class WorkerBase(AbstractWorker):
     async def _update_position_file(self):
         self.logger.debug2("Updating .position file")
         if self.current_location is not None:
-            with open(os.path.join(self._applicationArgs.file_path, self._origin + '.position'),
+            with open(os.path.join(self._application_args.file_path, self._origin + '.position'),
                       'w') as outfile:
                 outfile.write(str(self.current_location.lat) +
                               ", " + str(self.current_location.lng))
@@ -671,7 +671,7 @@ class WorkerBase(AbstractWorker):
         self.logger.info("WorkerBase::_restart_pogo_safe restarting pogo the long way")
         self._stop_pogo()
         time.sleep(1)
-        if self._applicationArgs.enable_worker_specific_extra_start_stop_handling:
+        if self._application_args.enable_worker_specific_extra_start_stop_handling:
             self._worker_specific_setup_stop()
             time.sleep(1)
         self._communicator.magisk_off()
@@ -682,7 +682,7 @@ class WorkerBase(AbstractWorker):
         time.sleep(25)
         self._stop_pogo()
         time.sleep(1)
-        if self._applicationArgs.enable_worker_specific_extra_start_stop_handling:
+        if self._application_args.enable_worker_specific_extra_start_stop_handling:
             self._worker_specific_setup_start()
             time.sleep(1)
         return self._start_pogo()

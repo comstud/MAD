@@ -259,7 +259,7 @@ class MITMBase(WorkerBase):
                                                                 float(self.current_location.lat),
                                                                 float(self.current_location.lng))
         max_distance_of_mode = self._mapping_manager.routemanager_get_max_radius(self._routemanager_name)
-        max_distance_for_worker = self._applicationArgs.maximum_valid_distance
+        max_distance_for_worker = self._application_args.maximum_valid_distance
         if max_distance_for_worker > max_distance_of_mode > MINIMUM_DISTANCE_ALLOWANCE_FOR_GMO:
             # some modes may be too strict (e.g. quests with 0.0001m calculations for routes)
             # yet, the route may "require" a stricter ruling than max valid distance
