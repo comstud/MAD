@@ -47,7 +47,7 @@ class MITMClient:
             return OriginInfo(origin, latest_info)
         return None
 
-    def get_protos_to_process(self, num=10):
+    def get_protos_to_process(self, num=20):
         url = self._url + '/proto_queue/protos?limit=%d' % num
         try:
             resp = self._session.get(url)
