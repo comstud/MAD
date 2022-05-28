@@ -4,8 +4,10 @@ from multiprocessing import Lock, Queue
 from multiprocessing.managers import SyncManager
 from queue import Empty
 from threading import Event, Thread
-from typing import Dict
+from typing import Dict, Optional
 
+from mapadroid.db import DbFactory
+from mapadroid.db import DbWrapper
 from mapadroid.db.DbStatsSubmit import DbStatsSubmit
 from mapadroid.mitm_receiver.PlayerStats import PlayerStats
 from mapadroid.utils.collections import Location
@@ -20,7 +22,7 @@ class MitmMapperManager(SyncManager):
 
 
 class MitmMapper(object):
-    def __init__(self, args, mapping_manager: MappingManager, db_stats_submit: DbStatsSubmit):
+    def __init__(self, args, mapping_manager: MappingManager, db_wrapper: Optional[DbWrapper.DbWrapper]):
         self.__mapping = {}
         self.__playerstats: Dict[str, PlayerStats] = {}
         self.__mapping_mutex = Lock()
@@ -29,7 +31,12 @@ class MitmMapper(object):
         self.__last_cellsid = {}
         self.__last_possibly_moved = {}
         self.__application_args = args
-        self._db_stats_submit: DbStatsSubmit = db_stats_submit
+
+        if db_wrapper is None:
+            db_wrapper, _unused = DbFactory.DbFactory.get_wrapper(args, multiproc=False, poolsize=2)
+
+        self._db_stats_submit: DbStatsSubmit = db_wrapper.proto_submit
+
         self.__playerstats_db_update_stop: Event = Event()
         self.__playerstats_db_update_queue: Queue = Queue()
         self.__playerstats_db_update_mutex: Lock = Lock()

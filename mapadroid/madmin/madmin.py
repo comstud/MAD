@@ -3,9 +3,11 @@ import os
 
 from flask import Flask, render_template
 from werkzeug.middleware.proxy_fix import ProxyFix
+from typing import Optional
 
 import mapadroid
 from mapadroid.db.DbWrapper import DbWrapper
+from mapadroid.db import DbFactory
 from mapadroid.madmin.api import APIEntry
 from mapadroid.madmin.reverseproxy import ReverseProxied
 from mapadroid.madmin.routes.apks import APKManager
@@ -52,9 +54,28 @@ def internal_error(self, exception):
 
 
 class MADmin(object):
-    def __init__(self, args, db_wrapper: DbWrapper, ws_server, mapping_manager: MappingManager, data_manager,
+    def __init__(self, args, db_wrapper: Optional[DbWrapper], ws_server, mapping_manager: MappingManager, data_manager,
                  device_updater, jobstatus, storage_obj, qg: QuestGen):
         app.add_template_global(name='app_config_mode', f=args.config_mode)
+        self._db_wrapper: Optional[DbWrapper] = db_wrapper
+        self._args = args
+        self._app = app
+        self._mapping_manager: MappingManager = mapping_manager
+        self._storage_obj = storage_obj
+        self._device_updater = device_updater
+        self._ws_server: WebsocketServer = ws_server
+        self._data_manager = data_manager
+        self._jobstatus = jobstatus
+        self._plugin_hotlink: list = []
+        self._qg = qg
+
+    def _init_db(self):
+        app = self._app
+        qg = self._qg
+        db_wrapper = self._db_wrapper
+        if self._db_wrapper is None:
+            db_wrapper, _unused = DbFactory.DbFactory.get_wrapper(self._args, multiproc=False, poolsize=10)
+            self._db_wrapper = db_wrapper
         # Determine if there are duplicate MACs
         sql = "SELECT count(*) > 0\n"\
               "FROM `settings_device`\n"\
@@ -71,20 +92,10 @@ class MADmin(object):
                 logger.warning("Duplicate MAC `{}` detected on devices {}", mac["mac_address"], mac["origins"])
             app.add_template_global(name='app_dupe_macs_devs', f=macs)
         app.add_template_global(name='app_dupe_macs', f=bool(dupe_mac))
-        self._db_wrapper: DbWrapper = db_wrapper
-        self._args = args
-        self._app = app
-        self._mapping_manager: MappingManager = mapping_manager
-        self._storage_obj = storage_obj
-        self._device_updater = device_updater
-        self._ws_server: WebsocketServer = ws_server
-        self._data_manager = data_manager
-        self._jobstatus = jobstatus
-        self._plugin_hotlink: list = []
         self.path = MADminPath(self._db_wrapper, self._args, self._app, self._mapping_manager, self._jobstatus,
                                self._data_manager, self._plugin_hotlink)
         self.map = MADminMap(self._db_wrapper, self._args, self._mapping_manager, self._app, self._data_manager, qg)
-        self.statistics = MADminStatistics(self._db_wrapper, self._args, app, self._mapping_manager, self._data_manager)
+        self.statistics = MADminStatistics(self._db_wrapper, self._args, self._app, self._mapping_manager, self._data_manager)
         self.control = MADminControl(self._db_wrapper, self._args, self._mapping_manager, self._ws_server, logger,
                                      self._app, self._device_updater)
         self.APIEntry = APIEntry(logger, self._app, self._data_manager, self._mapping_manager, self._ws_server,
@@ -101,6 +112,7 @@ class MADmin(object):
     @logger.catch()
     def madmin_start(self):
         try:
+            self._init_db()
             # load routes
             if self._args.madmin_base_path:
                 self._app.wsgi_app = ReverseProxied(self._app.wsgi_app, script_name=self._args.madmin_base_path)

@@ -1,9 +1,11 @@
 import time
 from datetime import datetime
 from multiprocessing import Process, Queue
+from typing import Optional
 import setproctitle
 
 from mapadroid.db.DbPogoProtoSubmit import DbPogoProtoSubmit
+from mapadroid.db import DbFactory
 from mapadroid.db.DbWrapper import DbWrapper
 from mapadroid.mitm_receiver.MitmMapper import MitmMapper
 from mapadroid.utils.logging import LoggerEnums, get_logger, get_origin_logger
@@ -15,9 +17,11 @@ logger = get_logger(LoggerEnums.mitm)
 
 class SerializedMitmDataProcessor(Process):
     def __init__(self, multi_proc_queue: Queue, application_args, mitm_mapper: MitmMapper,
-                 db_wrapper: DbWrapper, quest_gen: QuestGen, name=None):
+                 db_wrapper: Optional[DbWrapper], quest_gen: QuestGen, name=None):
         Process.__init__(self, name=name)
         self.__queue: Queue = multi_proc_queue
+        if db_wrapper is None:
+            db_wrapper, _unused = DbFactory.DbFactory.get_wrapper(application_args, multiproc=False, poolsize=2)
         self.__db_submit: DbPogoProtoSubmit = db_wrapper.proto_submit
         self.__application_args = application_args
         self.__mitm_mapper: MitmMapper = mitm_mapper

@@ -9,6 +9,7 @@ from typing import Coroutine, Dict, List, Optional, Set
 
 from mapadroid.data_manager import DataManager
 from mapadroid.db.DbWrapper import DbWrapper
+from mapadroid.db import DbFactory
 from mapadroid.mitm_receiver.MitmMapper import MitmMapper
 from mapadroid.ocr.pogoWindows import PogoWindows
 from mapadroid.utils.authHelper import check_auth
@@ -20,6 +21,8 @@ from mapadroid.websocket.AbstractCommunicator import AbstractCommunicator
 from mapadroid.websocket.communicator import Communicator
 from mapadroid.websocket.RGCClientInfo import WebsocketConnectedClientEntry
 from mapadroid.websocket.RGCClientInfo import requests_session
+from typing import Optional
+
 from mapadroid.worker.AbstractWorker import AbstractWorker
 from mapadroid.worker.WorkerFactory import WorkerFactory
 
@@ -32,10 +35,9 @@ logging.getLogger('websockets.protocol').addHandler(InterceptHandler(log_section
 logger = get_logger(LoggerEnums.websocket)
 
 class WebsocketServer(object):
-    def __init__(self, args, mitm_mapper: MitmMapper, db_wrapper: DbWrapper, mapping_manager: MappingManager,
+    def __init__(self, args, mitm_mapper: MitmMapper, db_wrapper: Optional[DbWrapper], mapping_manager: MappingManager,
                  pogo_window_manager: PogoWindows, data_manager: DataManager, event, enable_configmode: bool = False):
         self.__args = args
-        self.__db_wrapper: DbWrapper = db_wrapper
         self.__mapping_manager: MappingManager = mapping_manager
         self.__pogo_window_manager: PogoWindows = pogo_window_manager
         self.__data_manager: DataManager = data_manager
@@ -48,8 +50,10 @@ class WebsocketServer(object):
 
         self._current_devices_mutex = threading.Lock()
         self._current_devices: Dict[str, AbstractCommunicator] = {}
+        if db_wrapper is None:
+            db_wrapper, _unused = DbFactory.DbFactory.get_wrapper(args, multiproc=False)
         self.__worker_factory: WorkerFactory = WorkerFactory(self.__args, self.__mapping_manager, self.__mitm_mapper,
-                                                             self.__db_wrapper, self.__pogo_window_manager, event)
+                                                             db_wrapper, self.__pogo_window_manager, event)
 
     def _handle_new_devices(self, devices):
         use_configmode = self.__enable_configmode

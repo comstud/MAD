@@ -7,6 +7,7 @@ from queue import Empty, Queue
 from threading import Thread
 from typing import Dict, List, Optional, Set, Tuple
 
+from mapadroid.db import DbFactory
 from mapadroid.db.DbWrapper import DbWrapper
 from mapadroid.geofence.geofenceHelper import GeofenceHelper
 from mapadroid.route import RouteManagerBase, RouteManagerIV
@@ -81,6 +82,8 @@ class MappingManagerManager(SyncManager):
 
 class MappingManager:
     def __init__(self, db_wrapper: DbWrapper, args, data_manager, configmode: bool = False):
+        if db_wrapper is None:
+            db_wrapper, _unused = DbFactory.DbFactory.get_wrapper(args, multiproc=False, poolsize=10)
         self.__db_wrapper: DbWrapper = db_wrapper
         self.__args = args
         self.__configmode: bool = configmode

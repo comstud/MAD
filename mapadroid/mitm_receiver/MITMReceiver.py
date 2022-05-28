@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional, Union
 from flask import Flask, Response, request, send_file
 from gevent.pywsgi import WSGIServer
 
+from mapadroid.db import DbFactory
 from mapadroid.data_manager.dm_exceptions import UpdateIssue
 from mapadroid.mad_apk import (APKType, lookup_package_info, parse_frontend,
                                stream_package, supported_pogo_version)
@@ -173,7 +174,11 @@ class MITMReceiver(Process):
         self.__mitm_mapper: MitmMapper = mitm_mapper
         self.__data_manager = data_manager
         self.__hopper_mutex = RLock()
+
+        if db_wrapper is None:
+            db_wrapper, _unused = DbFactory.DbFactory.get_wrapper(args_passed, multiproc=False, poolsize=2)
         self._db_wrapper = db_wrapper
+
         self.__storage_obj = storage_obj
         self._data_queue: JoinableQueue = data_queue
         self.app = Flask("MITMReceiver")

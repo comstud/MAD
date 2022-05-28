@@ -1,10 +1,12 @@
 import json
 import time
-from typing import List
+from typing import List, Optional
 
 import requests
 
 from mapadroid.db.DbWebhookReader import DbWebhookReader
+from mapadroid.db import DbFactory
+from mapadroid.db import DbWrapper
 from mapadroid.geofence.geofenceHelper import GeofenceHelper
 from mapadroid.utils import MappingManager
 from mapadroid.utils.gamemechanicutil import calculate_mon_level
@@ -21,13 +23,14 @@ class WebhookWorker:
     __excluded_areas = {}
 
     def __init__(self, args, data_manager, mapping_manager: MappingManager, rarity,
-                 db_webhook_reader: DbWebhookReader, quest_gen: QuestGen):
+                 db_wrapper: Optional[DbWrapper.DbWrapper], quest_gen: QuestGen):
         self._quest_gen = quest_gen
         self.__worker_interval_sec = 10
         self.__args = args
         self.__data_manager = data_manager
-        self.__db_wrapper = self.__data_manager.dbc
-        self._db_reader = db_webhook_reader
+        if db_wrapper is None:
+            db_wrapper, _unused = DbFactory.DbFactory.get_wrapper(args, multiproc=False, poolsize=2)
+        self._db_reader = db_wrapper.webhook_reader
         self.__rarity = rarity
         self.__last_check = int(time.time())
         self.__webhook_receivers = []

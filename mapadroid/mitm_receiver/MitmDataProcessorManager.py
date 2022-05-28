@@ -1,8 +1,9 @@
 import threading
 import time
+from typing import Optional
 from multiprocessing import JoinableQueue
 
-from mapadroid.db.DbWrapper import DbWrapper
+from mapadroid.db import DbWrapper
 from mapadroid.mitm_receiver.MitmMapper import MitmMapper
 from mapadroid.mitm_receiver.SerializedMitmDataProcessor import \
     SerializedMitmDataProcessor
@@ -13,12 +14,12 @@ logger = get_logger(LoggerEnums.mitm)
 
 
 class MitmDataProcessorManager():
-    def __init__(self, args, mitm_mapper: MitmMapper, db_wrapper: DbWrapper, quest_gen: QuestGen):
+    def __init__(self, args, mitm_mapper: MitmMapper, db_wrapper: Optional[DbWrapper.DbWrapper], quest_gen: QuestGen):
         self._worker_threads = []
         self._args = args
         self._mitm_data_queue: JoinableQueue = JoinableQueue()
         self._mitm_mapper: MitmMapper = mitm_mapper
-        self._db_wrapper: DbWrapper = db_wrapper
+        self._db_wrapper: Optional[DbWrapper.DbWrapper] = db_wrapper
         self._queue_check_thread = None
         self._stop_queue_check_thread = False
 

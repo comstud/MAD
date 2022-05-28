@@ -199,6 +199,18 @@ if __name__ == "__main__":
         instance_id = db_wrapper.get_instance_id()
     except Exception:
         instance_id = None
+
+    # mitm_db_wrapper = db_wrapper
+    # ws_db_wrapper = db_wrapper
+    # wh_db_wrapper = db_wrapper
+    # admin_db_wrapper = db_wrapper
+    # Don't funnel these through a single process. So dumb that we're
+    # using a single connection pool for all processes.
+    mitm_db_wrapper = None
+    ws_db_wrapper = None
+    wh_db_wrapper = None
+    admin_db_wrapper = None
+
     data_manager = DataManager(db_wrapper, instance_id)
     MADPatcher(args, data_manager)
     data_manager.clear_on_boot()
@@ -210,7 +222,7 @@ if __name__ == "__main__":
     MappingManagerManager.register('MappingManager', MappingManager)
     mapping_manager_manager = MappingManagerManager()
     mapping_manager_manager.start(initializer=lambda: setproctitle.setproctitle('MappingManager - %s' % setproctitle.getproctitle()))
-    mapping_manager: MappingManager = mapping_manager_manager.MappingManager(db_wrapper,
+    mapping_manager: MappingManager = mapping_manager_manager.MappingManager(mitm_db_wrapper,
                                                                              args,
                                                                              data_manager,
                                                                              configmode=args.config_mode)
@@ -225,21 +237,22 @@ if __name__ == "__main__":
         logger.info("Done calculating routes!")
         # TODO: shutdown managers properly...
         sys.exit(0)
+
     (storage_manager, storage_elem) = get_storage_obj(args, db_wrapper)
     if not args.config_mode:
         pogo_win_manager = PogoWindows(args.temp_path, args.ocr_thread_count)
         MitmMapperManager.register('MitmMapper', MitmMapper)
         mitm_mapper_manager = MitmMapperManager()
         mitm_mapper_manager.start(initializer=lambda: setproctitle.setproctitle('MitmMapper - %s' % setproctitle.getproctitle()))
-        mitm_mapper = mitm_mapper_manager.MitmMapper(args, mapping_manager, db_wrapper.stats_submit)
+        mitm_mapper = mitm_mapper_manager.MitmMapper(args, mapping_manager, mitm_db_wrapper)
 
     logger.info('Starting PogoDroid Receiver server on port {}'.format(str(args.mitmreceiver_port)))
 
-    mitm_data_processor_manager = MitmDataProcessorManager(args, mitm_mapper, db_wrapper, quest_gen)
+    mitm_data_processor_manager = MitmDataProcessorManager(args, mitm_mapper, mitm_db_wrapper, quest_gen)
     mitm_data_processor_manager.launch_processors()
 
     mitm_receiver_process = MITMReceiver(args.mitmreceiver_ip, int(args.mitmreceiver_port),
-                                         mitm_mapper, args, mapping_manager, db_wrapper,
+                                         mitm_mapper, args, mapping_manager, mitm_db_wrapper,
                                          data_manager, storage_elem,
                                          mitm_data_processor_manager.get_queue(),
                                          enable_configmode=args.config_mode)
@@ -248,7 +261,7 @@ if __name__ == "__main__":
     logger.info('Starting websocket server on port {}'.format(str(args.ws_port)))
     ws_server = WebsocketServer(args=args,
                                 mitm_mapper=mitm_mapper,
-                                db_wrapper=db_wrapper,
+                                db_wrapper=ws_db_wrapper,
                                 mapping_manager=mapping_manager,
                                 pogo_window_manager=pogo_win_manager,
                                 data_manager=data_manager,
@@ -260,9 +273,9 @@ if __name__ == "__main__":
     device_updater = DeviceUpdater(ws_server, args, jobstatus, db_wrapper, storage_elem)
     if not args.config_mode:
         if args.webhook:
-            rarity = Rarity(args, db_wrapper)
+            rarity = Rarity(args, wh_db_wrapper)
             rarity.start_dynamic_rarity()
-            webhook_worker = WebhookWorker(args, data_manager, mapping_manager, rarity, db_wrapper.webhook_reader,
+            webhook_worker = WebhookWorker(args, data_manager, mapping_manager, rarity, wh_db_wrapper,
                                            quest_gen)
             t_whw = Thread(name="system",
                            target=webhook_worker.run_worker)
@@ -275,7 +288,7 @@ if __name__ == "__main__":
             t_usage.daemon = True
             t_usage.start()
 
-    madmin = MADmin(args, db_wrapper, ws_server, mapping_manager, data_manager, device_updater, jobstatus, storage_elem,
+    madmin = MADmin(args, admin_db_wrapper, ws_server, mapping_manager, data_manager, device_updater, jobstatus, storage_elem,
                     quest_gen)
 
     # starting plugin system

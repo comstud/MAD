@@ -2,6 +2,7 @@ import time
 from threading import Thread
 from timeit import default_timer
 
+from mapadroid.db import DbFactory
 from mapadroid.utils.logging import LoggerEnums, get_logger
 
 logger = get_logger(LoggerEnums.utils)
@@ -12,6 +13,13 @@ class Rarity(object):
         self.args = args
         self._dbwrapper = dbwrapper
         self._rarity = {}
+
+    def _get_db_wrapper(self):
+        dbwrapper = self._dbwrapper
+        if dbwrapper is None:
+            dbwrapper, _unused = DbFactory.DbFactory.get_wrapper(self.args, multiproc=False, poolsize=5)
+            self._dbwrapper = dbwrapper
+        return dbwrapper
 
     def get_pokemon_rarity(self, total_spawns_all, total_spawns_pokemon):
         spawn_group = 1
@@ -48,7 +56,7 @@ class Rarity(object):
             logger.info('Updating dynamic rarity...')
 
             start = default_timer()
-            db_rarities = self._dbwrapper.get_pokemon_spawns(hours)
+            db_rarities = self._get_db_wrapper().get_pokemon_spawns(hours)
             logger.debug('Pokemon Rarity: {}', db_rarities)
             total = db_rarities['total']
             pokemon = db_rarities['pokemon']
