@@ -20,6 +20,7 @@ from mapadroid.mad_apk import (AbstractAPKStorage, StorageSyncManager,
 from mapadroid.madmin.madmin import MADmin
 from mapadroid.mitm_receiver.MitmDataProcessorManager import \
     MitmDataProcessorManager
+from mapadroid.mitm_receiver import MITMMapperWrapper
 from mapadroid.mitm_receiver.MitmMapper import MitmMapper, MitmMapperManager
 from mapadroid.mitm_receiver.MITMReceiver import MITMReceiver
 from mapadroid.ocr.pogoWindows import PogoWindows
@@ -245,6 +246,7 @@ if __name__ == "__main__":
         mitm_mapper_manager = MitmMapperManager()
         mitm_mapper_manager.start(initializer=lambda: setproctitle.setproctitle('MitmMapper - %s' % setproctitle.getproctitle()))
         mitm_mapper = mitm_mapper_manager.MitmMapper(args, mapping_manager, mitm_db_wrapper)
+        mitm_mapper = MITMMapperWrapper.MITMMapperWrapper(args, mitm_mapper)
 
     logger.info('Starting PogoDroid Receiver server on port {}'.format(str(args.mitmreceiver_port)))
 
