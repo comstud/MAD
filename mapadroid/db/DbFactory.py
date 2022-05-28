@@ -1,6 +1,8 @@
 import sys
 from multiprocessing.managers import SyncManager
 
+import setproctitle
+
 from mapadroid.db.DbWrapper import DbWrapper
 from mapadroid.db.PooledQueryExecutor import (PooledQueryExecutor,
                                               PooledQuerySyncManager)
@@ -24,7 +26,7 @@ class DbFactory:
 
         PooledQuerySyncManager.register("PooledQueryExecutor", PooledQueryExecutor)
         db_pool_manager = PooledQuerySyncManager()
-        db_pool_manager.start()
+        db_pool_manager.start(initializer=lambda: setproctitle.setproctitle('DbPool - %s' % setproctitle.getproctitle()))
         db_exec = db_pool_manager.PooledQueryExecutor(host=args.dbip, port=args.dbport,
                                                       username=args.dbusername, password=args.dbpassword,
                                                       database=args.dbname, poolsize=args.db_poolsize)

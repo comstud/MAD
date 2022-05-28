@@ -11,6 +11,7 @@ from typing import Optional
 
 import pkg_resources
 import psutil
+import setproctitle
 
 from mapadroid.data_manager import DataManager
 from mapadroid.db.DbFactory import DbFactory
@@ -208,7 +209,7 @@ if __name__ == "__main__":
     time.sleep(.1)
     MappingManagerManager.register('MappingManager', MappingManager)
     mapping_manager_manager = MappingManagerManager()
-    mapping_manager_manager.start()
+    mapping_manager_manager.start(initializer=lambda: setproctitle.setproctitle('MappingManager - %s' % setproctitle.getproctitle()))
     mapping_manager: MappingManager = mapping_manager_manager.MappingManager(db_wrapper,
                                                                              args,
                                                                              data_manager,
@@ -229,7 +230,7 @@ if __name__ == "__main__":
         pogo_win_manager = PogoWindows(args.temp_path, args.ocr_thread_count)
         MitmMapperManager.register('MitmMapper', MitmMapper)
         mitm_mapper_manager = MitmMapperManager()
-        mitm_mapper_manager.start()
+        mitm_mapper_manager.start(initializer=lambda: setproctitle.setproctitle('MitmMapper - %s' % setproctitle.getproctitle()))
         mitm_mapper = mitm_mapper_manager.MitmMapper(args, mapping_manager, db_wrapper.stats_submit)
 
     logger.info('Starting PogoDroid Receiver server on port {}'.format(str(args.mitmreceiver_port)))

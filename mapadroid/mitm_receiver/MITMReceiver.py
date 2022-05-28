@@ -6,6 +6,7 @@ import sys
 import time
 from functools import wraps
 from multiprocessing import JoinableQueue, Process
+import setproctitle
 from threading import RLock
 from typing import Any, Dict, Optional, Union
 
@@ -236,6 +237,7 @@ class MITMReceiver(Process):
             self._add_to_queue(None)
 
     def run(self):
+        setproctitle.setproctitle('%s - %s' % (self.name, setproctitle.getproctitle()))
         httpsrv = WSGIServer((self.__listen_ip, int(
             self.__listen_port)), self.app.wsgi_app, log=LogLevelChanger)
         try:

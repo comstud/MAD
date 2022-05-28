@@ -1,5 +1,7 @@
 from multiprocessing.managers import SyncManager  # noqa: F401
 
+import setproctitle
+
 from .abstract_apk_storage import AbstractAPKStorage  # noqa: F401
 from .apk_enums import *  # noqa: F401 F403
 from .apk_storage_db import APKStorageDatabase  # noqa: F401
@@ -20,11 +22,11 @@ def get_storage_obj(application_args, dbc):
     if application_args.apk_storage_interface == 'db':
         StorageSyncManager.register('APKStorageDatabase', APKStorageDatabase)
         manager = StorageSyncManager()
-        manager.start()
+        manager.start(initializer=lambda: setproctitle.setproctitle('APKStorageDB - %s' % setproctitle.getproctitle()))
         storage_obj = manager.APKStorageDatabase(dbc, application_args.maddev_api_token)
     else:
         StorageSyncManager.register('APKStorageFilesystem', APKStorageFilesystem)
         manager = StorageSyncManager()
-        manager.start()
+        manager.start(initializer=lambda: setproctitle.setproctitle('APKStorageFS - %s' % setproctitle.getproctitle()))
         storage_obj = manager.APKStorageFilesystem(application_args)
     return (manager, storage_obj)

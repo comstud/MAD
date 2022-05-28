@@ -24,3 +24,4 @@ pytesseract~=0.3
 requests~=2.22
 s2sphere~=0.2
 websockets>=7
+setproctitle==1.2.3

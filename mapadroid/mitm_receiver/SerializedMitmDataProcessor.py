@@ -1,6 +1,7 @@
 import time
 from datetime import datetime
 from multiprocessing import Process, Queue
+import setproctitle
 
 from mapadroid.db.DbPogoProtoSubmit import DbPogoProtoSubmit
 from mapadroid.db.DbWrapper import DbWrapper
@@ -24,6 +25,7 @@ class SerializedMitmDataProcessor(Process):
         self.__name = name
 
     def run(self):
+        setproctitle.setproctitle('%s - %s' % (self.name, setproctitle.getproctitle()))
         logger.info("Starting serialized MITM data processor")
         if self.__application_args.use_mitm_communicator:
             self._mitm_comm_run()
