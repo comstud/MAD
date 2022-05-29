@@ -7,17 +7,14 @@ logger = get_logger(LoggerEnums.system)
 
 CACHE_INFO = {}
 
-def _redis_is_ok(redis):
-    try:
-        redis.ping()
-        return True
-    except Exception:
-        return False
-
 def _get_redis_cache(args):
     try:
         import redis
-        cache = redis.Redis(host=args.cache_host, port=args.cache_port, db=args.cache_database, single_connection_client=True)
+        import redis.backoff
+        import redis.retry
+
+        retry = redis.retry.Retry(redis.backoff.ExponentialBackoff(10, 0.25), 10)
+        cache = redis.Redis(host=args.cache_host, port=args.cache_port, db=args.cache_database, single_connection_client=True, retry=retry)
     except ImportError:
         logger.error("Cache enabled but redis dependency not installed. Continuing without cache")
         return None
@@ -51,9 +48,7 @@ def get_cache(args):
         CACHE_INFO[cache_key] = cache_info
 
     if cache_info.get('pid', 0) == pid:
-        cache = cache_info['redis']
-        if _redis_is_ok(cache):
-            return cache
+        return cache_info['redis']
 
     cache_info['pid'] = 0
     cache_info['redis'] = None
