@@ -100,7 +100,7 @@ class SerializedMitmDataProcessor(Process):
                     return
 
             if data_type == 106:
-                origin_logger.info("Processing GMO. Received at {}", processed_timestamp)
+                origin_logger.debug("Processing GMO. Received at {}", processed_timestamp)
 
                 weather_time_start = self.get_time_ms()
                 self.__db_submit.weather(origin, data["payload"], received_timestamp)
