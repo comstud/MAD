@@ -14,7 +14,9 @@ def _get_redis_cache(args):
         import redis.retry
 
         retry = redis.retry.Retry(redis.backoff.ExponentialBackoff(10, 0.25), 10)
-        cache = redis.Redis(host=args.cache_host, port=args.cache_port, db=args.cache_database, single_connection_client=True, retry=retry)
+        cache = redis.Redis(host=args.cache_host, port=args.cache_port, db=args.cache_database, retry=retry)
+        cache.ping()
+        return cache
     except ImportError:
         logger.error("Cache enabled but redis dependency not installed. Continuing without cache")
         return None
@@ -25,18 +27,18 @@ def _get_redis_cache(args):
         logger.error("Unknown error while enabling cache. Continuing without cache")
         return None
 
-    return cache
-
-def _get_noop_cache(args):
+def _get_noop_cache(args, required=False):
+    if required:
+        raise Exception('redis is required but we tried to return a NoopCache')
     noop_cache = CACHE_INFO.get('noop')
     if noop_cache is None:
         noop_cache = NoopCache()
         CACHE_INFO['noop'] = noop_cache
     return noop_cache
 
-def get_cache(args):
+def get_cache(args, required=False):
     if not args.enable_cache:
-        return _get_noop_cache(args)
+        return _get_noop_cache(args, required=required)
 
     pid = os.getpid()
     cache_key = '%s|%s|%s' % (args.cache_host, args.cache_port, args.cache_database)
@@ -55,7 +57,7 @@ def get_cache(args):
 
     cache = _get_redis_cache(args)
     if cache is None:
-        return _get_noop_cache(args)
+        return _get_noop_cache(args, required=required)
     cache_info['pid'] = pid
     cache_info['redis'] = cache
 
