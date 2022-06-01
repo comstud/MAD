@@ -444,9 +444,13 @@ class DeviceUpdater(object):
                 else:
                     self._log[str(job_id)] = field
 
-        self.update_status_log()
+            self._update_status_log()
 
-    def update_status_log(self):
+    def _update_status_log(self):
+        '''Updates the job status log file.
+        Needs to be called with self._update_mutex held because otherwise:
+        RuntimeError: dictionary changed size during iteration
+        '''
         with open('update_log.json', 'w') as outfile:
             json.dump(self._log, outfile, indent=4)
 
