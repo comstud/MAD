@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import numpy as np
 from dataclasses import dataclass
 
+from mapadroid import cache as redis
 from mapadroid.data_manager import DataManager
 from mapadroid.data_manager.modules.geofence import GeoFence
 from mapadroid.data_manager.modules.routecalc import RouteCalc

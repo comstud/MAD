@@ -153,10 +153,21 @@ class AreaRaidsMITM(Area):
                     "type": "option",
                     "require": False,
                     "values": [False, True],
+                    "empty": False,
                     "description":
                         "Dynamically generate the areas IV list to ensure all mons are included. If a mon is not part "
                         "of the IV list it will be appended to the end of the list. Mons will be added in ascending "
                         "order based on their ID.",
+                    "expected": bool
+                }
+            },
+            "disable_mons": {
+                "settings": {
+                    "type": "option",
+                    "require": False,
+                    "values": [False, True],
+                    "empty": False,
+                    "description": "Ignore mons (do not put mons in the DB) while scanning raids.",
                     "expected": bool
                 }
             },
@@ -172,3 +183,22 @@ class AreaRaidsMITM(Area):
             }
         }
     }
+
+    def translate_keys(self, data, operation, translations=None):
+        do_it = False
+        if 'all_mons' in data:
+            data = dict(**data)
+            do_it = True
+        if operation == 'load':
+            if do_it:
+                # NOTE(cjb): HACK: first bit of 'all_mons' is 'all_mons'. 2nd bit is 'disable_mons'.
+                data['disable_mons'] = (data['all_mons'] >> 1) & 0x1
+                data['all_mons'] = data['all_mons'] & 0x1
+        elif do_it:
+            all_mons = 0
+            if data['all_mons']:
+                all_mons = 1
+            if data.pop('disable_mons', False):
+                all_mons |= 2
+            data['all_mons'] = all_mons
+        return super().translate_keys(data, operation, translations=translations)

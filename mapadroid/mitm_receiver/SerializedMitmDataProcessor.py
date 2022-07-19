@@ -4,6 +4,7 @@ from multiprocessing import Process, Queue
 from typing import Optional
 import setproctitle
 
+from mapadroid import cache as redis
 from mapadroid.db.DbPogoProtoSubmit import DbPogoProtoSubmit
 from mapadroid.db import DbFactory
 from mapadroid.db.DbWrapper import DbWrapper
@@ -48,6 +49,12 @@ class SerializedMitmDataProcessor(Process):
             except KeyboardInterrupt:
                 logger.info("Received keyboard interrupt, stopping MITM data processor")
                 break
+
+    def _get_cache(self):
+        return redis.get_cache(self.__application_args, required=True)
+
+    def _mons_disabled_for_worker(self, worker_name):
+        return self._get_cache().exists('disable-mons-%s' % worker_name)
 
     def _mitm_comm_run(self):
         client = mitm_client.MITMClient(self.__application_args.mitm_communicator_url)
@@ -99,8 +106,10 @@ class SerializedMitmDataProcessor(Process):
                         processed_timestamp, threshold_seconds, datetime.fromtimestamp(minimum_timestamp))
                     return
 
+
             if data_type == 106:
                 origin_logger.debug("Processing GMO. Received at {}", processed_timestamp)
+                mons_disabled  = self._mons_disabled_for_worker(origin)
 
                 weather_time_start = self.get_time_ms()
                 self.__db_submit.weather(origin, data["payload"], received_timestamp)
@@ -123,8 +132,12 @@ class SerializedMitmDataProcessor(Process):
                 spawnpoints_time = self.get_time_ms() - spawnpoints_time_start
 
                 mons_time_start = self.get_time_ms()
-                wild_encounters = self.__db_submit.mons(
-                    origin, received_timestamp, data["payload"], self.__mitm_mapper)
+                if mons_disabled:
+                    origin_logger.debug('skipping wild mons in GMO due to mons_disabled')
+                    wild_encounters = []
+                else:
+                    wild_encounters = self.__db_submit.mons(
+                        origin, received_timestamp, data["payload"], self.__mitm_mapper)
                 mons_time = self.get_time_ms() - mons_time_start
 
                 cells_time_start = self.get_time_ms()
@@ -135,7 +148,7 @@ class SerializedMitmDataProcessor(Process):
                 self.__mitm_mapper.submit_gmo_for_location(origin, data["payload"])
                 gmo_loc_time = self.get_time_ms() - gmo_loc_start
 
-                if self.__application_args.scan_lured_mons:
+                if self.__application_args.scan_lured_mons and not mons_disabled:
                     lurenoiv_start = self.get_time_ms()
                     lure_wild = self.__db_submit.mon_lure_noiv(origin, data["payload"])
                     lurenoiv_time = self.get_time_ms() - lurenoiv_start
@@ -143,7 +156,7 @@ class SerializedMitmDataProcessor(Process):
                     lurenoiv_time = 0
                     lure_wild = []
 
-                if self.__application_args.scan_nearby_mons:
+                if self.__application_args.scan_nearby_mons and not mons_disabled:
                     nearby_mons_time_start = self.get_time_ms()
                     cell_encounters, stop_encounters = self.__db_submit.nearby_mons(
                         origin, received_timestamp, data["payload"], self.__mitm_mapper)
@@ -169,7 +182,9 @@ class SerializedMitmDataProcessor(Process):
                                     cells_time, gmo_loc_time)
             elif data_type == 102:
                 playerlevel = self.__mitm_mapper.get_playerlevel(origin)
-                if playerlevel >= 30:
+                mons_disabled  = self._mons_disabled_for_worker(origin)
+
+                if playerlevel >= 30 and not mons_disabled:
                     origin_logger.debug("Processing encounter received at {}", processed_timestamp)
                     encounter = self.__db_submit.mon_iv(
                         origin, received_timestamp, data["payload"], self.__mitm_mapper)
@@ -185,6 +200,8 @@ class SerializedMitmDataProcessor(Process):
                     else:
                         extra ='cached'
                     origin_logger.debug("Done processing encounter in {}ms ({})", end_time, extra)
+                elif mons_disabled:
+                    origin_logger.debug('skipping wild mon encounter due to mons_disabled')
                 else:
                     origin_logger.warning("Playerlevel lower than 30 - not processing encounter IVs")
 

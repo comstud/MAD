@@ -7,6 +7,7 @@ from queue import Empty, Queue
 from threading import Thread
 from typing import Dict, List, Optional, Set, Tuple
 
+from mapadroid import cache as redis
 from mapadroid.db import DbFactory
 from mapadroid.db.DbWrapper import DbWrapper
 from mapadroid.geofence.geofenceHelper import GeofenceHelper
@@ -202,9 +203,25 @@ class MappingManager:
 
     def register_worker_to_routemanager(self, routemanager_name: str, worker_name: str) -> bool:
         routemanager = self.__fetch_routemanager(routemanager_name)
-        return routemanager.register_worker(worker_name) if routemanager is not None else False
+        if routemanager is None:
+            return False
+        res = routemanager.register_worker(worker_name)
+        if res:
+            # Device was registered successfully with a route manager. Handle
+            # whether that route manager wants mons disabled or not.
+            cache_key = 'disable-mons-%s' % worker_name
+            cache = redis.get_cache(self.__args, required=True)
+            settings = routemanager.get_settings()
+            if settings is not None and settings.get('disable_mons'):
+                cache.set(cache_key, 1, ex=86400 * 2)
+            else:
+                cache.delete(cache_key)
+        return res
 
     def unregister_worker_from_routemanager(self, routemanager_name: str, worker_name: str):
+        # NOTE(comstud): if mons were disabled in raid_mitm, we leave it that way. the next
+        # time the device registers, we'll figure out if it should continue to have them disabled
+        # or not.
         routemanager = self.__fetch_routemanager(routemanager_name)
         return routemanager.unregister_worker(worker_name) if routemanager is not None else None
 
