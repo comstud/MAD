@@ -15,6 +15,60 @@ from mapadroid.utils.s2Helper import S2Helper
 
 logger = get_logger(LoggerEnums.database)
 
+POKESTOP_INSERT_QUERY = (
+    "INSERT INTO pokestop (pokestop_id, enabled, latitude, longitude, last_modified, lure_expiration, "
+    "last_updated, active_fort_modifier, incident_start, incident_expiration, incident_grunt_type, "
+    "is_ar_scan_eligible) "
+    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+    "ON DUPLICATE KEY UPDATE last_updated=VALUES(last_updated), lure_expiration=VALUES(lure_expiration), "
+    "last_modified=VALUES(last_modified), latitude=VALUES(latitude), longitude=VALUES(longitude), "
+    "active_fort_modifier=VALUES(active_fort_modifier), incident_start=VALUES(incident_start), "
+    "incident_expiration=VALUES(incident_expiration), incident_grunt_type=VALUES(incident_grunt_type), "
+    "is_ar_scan_eligible=VALUES(is_ar_scan_eligible) "
+)
+
+_POKESTOP_INCIDENT_CREATE_TABLE = """
+create table pokestop_incident (
+    `incident_id` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+    `pokestop_id` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+    `modified_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `starts_at` timestamp NULL DEFAULT NULL,
+    `expires_at` timestamp NULL DEFAULT NULL,
+    `display_type` int NOT NULL,
+    `hidden` int NOT NULL DEFAULT 0,
+    `order_priority` int NOT NULL DEFAULT 0,
+    `character` int NULL DEFAULT NULL,
+    `style` int NULL DEFAULT NULL,
+    PRIMARY KEY (`incident_id`),
+    KEY `pokestop_incident_pokestop_id` (`pokestop_id`),
+    KEY `pokestop_modified_at` (`modified_at`),
+    KEY `pokestop_incident_starts_at` (`starts_at`),
+    KEY `pokestop_incident_expires_at` (`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+"""
+
+_POKESTOP_INCIDENT_COLS_INFO = {
+            'incident_id': '%s',
+            'pokestop_id': '%s',
+            'starts_at': 'FROM_UNIXTIME(%s)',
+            'expires_at': 'FROM_UNIXTIME(%s)',
+            'display_type': '%s',
+            'hidden': '%s',
+            'order_priority': '%s',
+            'character': '%s',
+            'style': '%s'}
+
+POKESTOP_INCIDENT_COLS = list(_POKESTOP_INCIDENT_COLS_INFO.keys())
+
+_POKESTOP_INCIDENT_COLS_STR = '(' + ','.join(['`'+x+'`' for x in POKESTOP_INCIDENT_COLS]) + ')'
+_POKESTOP_INCIDENT_VALUES = 'VALUES (' + ','.join([_POKESTOP_INCIDENT_COLS_INFO[x] for x in POKESTOP_INCIDENT_COLS]) + ')'
+_POKESTOP_INCIDENT_UPDATES = ','.join(['`%s`=VALUES(`%s`)' % (x,x) for x in POKESTOP_INCIDENT_COLS])
+
+POKESTOP_INCIDENT_INSERT_QUERY = ('INSERT INTO pokestop_incident ' +
+    _POKESTOP_INCIDENT_COLS_STR +
+    ' ' + _POKESTOP_INCIDENT_VALUES + 
+    ' ON DUPLICATE KEY UPDATE ' + _POKESTOP_INCIDENT_UPDATES)
+
 
 class DbPogoProtoSubmit:
     """
@@ -601,31 +655,26 @@ class DbPogoProtoSubmit:
         if cells is None:
             return False
 
-        query_stops = (
-            "INSERT INTO pokestop (pokestop_id, enabled, latitude, longitude, last_modified, lure_expiration, "
-            "last_updated, active_fort_modifier, incident_start, incident_expiration, incident_grunt_type, "
-            "is_ar_scan_eligible) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
-            "ON DUPLICATE KEY UPDATE last_updated=VALUES(last_updated), lure_expiration=VALUES(lure_expiration), "
-            "last_modified=VALUES(last_modified), latitude=VALUES(latitude), longitude=VALUES(longitude), "
-            "active_fort_modifier=VALUES(active_fort_modifier), incident_start=VALUES(incident_start), "
-            "incident_expiration=VALUES(incident_expiration), incident_grunt_type=VALUES(incident_grunt_type), "
-            "is_ar_scan_eligible=VALUES(is_ar_scan_eligible) "
-        )
-
         stops_args = []
+        incidents_args = []
         for cell in cells:
             for fort in cell["forts"]:
                 if fort["type"] == 1:
-                    stop = self._extract_args_single_stop(fort)
+                    stop, incidents = self._extract_args_single_stop(fort)
                     alt_modified_time = int(math.ceil(datetime.utcnow().timestamp() / 1000)) * 1000
                     cache_key = "stop{}{}".format(fort["id"], fort.get("last_modified_timestamp_ms", alt_modified_time))
                     if cache.exists(cache_key):
                         continue
                     cache.set(cache_key, 1, ex=900)
                     stops_args.append(stop)
+                    for incident in incidents:
+                        incidents_args.append(tuple([ incident[x] for x in POKESTOP_INCIDENT_COLS ]))
 
-        self._db_exec.executemany(query_stops, stops_args, commit=True)
+        if stops_args:
+            self._db_exec.executemany(POKESTOP_INSERT_QUERY, stops_args, commit=True)
+        if incidents_args:
+            self._db_exec.executemany(POKESTOP_INCIDENT_INSERT_QUERY, incidents_args, commit=True)
+
         return True
 
     def stop_details(self, stop_proto: dict):
@@ -1003,9 +1052,11 @@ class DbPogoProtoSubmit:
         self._db_exec.executemany(query, cells, commit=True)
 
     def _extract_args_single_stop(self, stop_data):
+        incidents = []
+
         if stop_data["type"] != 1:
             logger.info("{} is not a pokestop", stop_data)
-            return None
+            return None, None
 
         now = datetime.utcfromtimestamp(time.time()).strftime("%Y-%m-%d %H:%M:%S")
         last_modified = datetime.utcfromtimestamp(
@@ -1034,20 +1085,65 @@ class DbPogoProtoSubmit:
                 lure_duration * 60 + (stop_data["last_modified_timestamp_ms"] / 1000)
             ).strftime("%Y-%m-%d %H:%M:%S")
 
-        if "pokestop_displays" in stop_data \
-                and len(stop_data["pokestop_displays"]) > 0 \
-                and stop_data["pokestop_displays"][0]["character_display"] is not None \
-                and stop_data["pokestop_displays"][0]["character_display"]["character"] > 1:
-            start_ms = stop_data["pokestop_displays"][0]["incident_start_ms"]
-            expiration_ms = stop_data["pokestop_displays"][0]["incident_expiration_ms"]
-            incident_grunt_type = stop_data["pokestop_displays"][0]["character_display"]["character"]
+        pokestop_displays = stop_data.get('pokestop_displays')
+        if pokestop_displays:
+            first_character_incident = None
 
-            if start_ms > 0:
-                incident_start = datetime.utcfromtimestamp(start_ms / 1000).strftime("%Y-%m-%d %H:%M:%S")
+            for pokestop_display in pokestop_displays:
+                incident_id = pokestop_display.get('incident_id')
+                if not incident_id:
+                    continue
+                display_type = pokestop_display.get('incident_display_type')
+                if not display_type:
+                    continue
 
-            if expiration_ms > 0:
-                incident_expiration = datetime.utcfromtimestamp(expiration_ms / 1000).strftime(
-                    "%Y-%m-%d %H:%M:%S")
+                starts_at = pokestop_display["incident_start_ms"] or None
+                if starts_at:
+                    starts_at /= 1000
+
+                expires_at = pokestop_display["incident_expiration_ms"] or None
+                if expires_at:
+                    expires_at /= 1000
+
+                style = None
+                character = None
+
+                char_display = pokestop_display.get('character_display')
+                invasion_finished = pokestop_display.get('invasion_finished')
+
+                if char_display:
+                    if char_display.get('character'):
+                        character = char_display['character']
+                    if char_display.get('style'):
+                        style = char_display['style']
+                elif invasion_finished:
+                    if invasion_finished.get('style'):
+                        style = invasion_finished['style']
+
+                incident = {
+                        'incident_id': incident_id,
+                        'pokestop_id': stop_data['id'],
+                        'display_type': display_type,
+                        'starts_at': starts_at,
+                        'expires_at': expires_at,
+                        'hidden': pokestop_display.get('hide_incident') and 1 or 0,
+                        'order_priority': pokestop_display.get('incident_display_order_priority', 0),
+                        'character': character,
+                        'style': style}
+                incidents.append(incident)
+                if character and not first_character_incident:
+                    first_character_incident = incident
+
+            if first_character_incident:
+                incident_grunt_type = first_character_incident['character']
+                start_s = first_character_incident['starts_at']
+                if start_s:
+                     incident_start = datetime.utcfromtimestamp(start_s).strftime("%Y-%m-%d %H:%M:%S")
+                expir_s = first_character_incident['expires_at']
+                if expir_s:
+                    incident_expiration = datetime.utcfromtimestamp(expir_s).strftime(
+                        "%Y-%m-%d %H:%M:%S")
+
         elif "pokestop_display" in stop_data:
             start_ms = stop_data["pokestop_display"]["incident_start_ms"]
             expiration_ms = stop_data["pokestop_display"]["incident_expiration_ms"]
@@ -1063,7 +1159,7 @@ class DbPogoProtoSubmit:
         return (stop_data["id"], 1, stop_data["latitude"], stop_data["longitude"],
                 last_modified, lure, now, active_fort_modifier,
                 incident_start, incident_expiration, incident_grunt_type, is_ar_scan_eligible
-                )
+                ), incidents
 
     def _extract_args_single_stop_details(self, stop_data):
         if stop_data.get("type", 999) != 1:
