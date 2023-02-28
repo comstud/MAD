@@ -406,9 +406,9 @@ class WordToScreenMatching(object):
             password_y = self._height / 2.105 + self._screenshot_y_offset
             button_y = self._height / 1.7777 + self._screenshot_y_offset
         elif float(self._ratio) >= 1.7:
-            username_y = self._height / 2.224797219003476 + self._screenshot_y_offset
-            password_y = self._height / 1.875 + self._screenshot_y_offset
-            button_y = self._height / 1.58285243198681 + self._screenshot_y_offset
+            username_y = self._height / 1.9692307692 + self._screenshot_y_offset
+            password_y = self._height / 1.5177865612 + self._screenshot_y_offset
+            button_y = self._height / 1.2427184466 + self._screenshot_y_offset
         elif float(self._ratio) < 1.7:
             username_y = self._height / 2.224797219003476 + self._screenshot_y_offset
             password_y = self._height / 1.875 + self._screenshot_y_offset
