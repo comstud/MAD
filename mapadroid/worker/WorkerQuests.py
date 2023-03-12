@@ -631,7 +631,7 @@ class WorkerQuests(MITMBase):
 
             to += 1
 
-        if to > 2:
+        if type_received != LatestReceivedType.STOP:
             self._open_pokestop_failcount += 1
             self.logger.warning(f"Giving up on this stop after 3 failures in open_pokestop loop - failcount is "
                                 f"now {self._open_pokestop_failcount}")

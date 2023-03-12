@@ -83,9 +83,7 @@ class WorkerConfigmode(AbstractWorker):
         if self._walker is None:
             return True
         walkereventid = self._walker.get('eventid', None)
-        if walkereventid is None:
-            walkereventid = 1
-        if walkereventid != self._event.get_current_event_id():
+        if walkereventid is not None and walkereventid != self._event.get_current_event_id():
             self.logger.info("Another Event has started - leaving now")
             return False
         mode = self._walker['walkertype']
@@ -137,8 +135,13 @@ class WorkerConfigmode(AbstractWorker):
                 self.logger.debug("Setting device to idle for routemanager")
                 self._db_wrapper.save_idle_status(self._dev_id, True)
                 self.logger.debug("Device set to idle for routemanager")
-            while check_walker_value_type(sleeptime) and not self._stop_worker_event.is_set():
-                time.sleep(1)
+            while check_walker_value_type(sleeptime):
+                if self._stop_worker_event.is_set():
+                    return False
+                if walkereventid is not None and walkereventid != self._event.get_current_event_id():
+                    self.logger.info("Another Event has started - leaving now")
+                    return False
+                time.sleep(5)
             self.logger.info('just woke up')
             if killpogo:
                 try:
@@ -181,7 +184,7 @@ class WorkerConfigmode(AbstractWorker):
                 self._mitm_mapper.set_injection_status(self._origin, False)
             self._communicator.start_app("com.nianticlabs.pokemongo")
             time.sleep(1)
-            self._communicator.is_pogo_topmost()
+            pogo_topmost = self._communicator.is_pogo_topmost()
 
         reached_raidtab = False
         self._wait_pogo_start_delay()
