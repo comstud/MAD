@@ -4,6 +4,7 @@ from multiprocessing import Process, Queue
 from typing import Optional
 import setproctitle
 
+from mapadroid import account_manager
 from mapadroid import cache as redis
 from mapadroid.db.DbPogoProtoSubmit import DbPogoProtoSubmit
 from mapadroid.db import DbFactory
@@ -23,6 +24,7 @@ class SerializedMitmDataProcessor(Process):
         self.__queue: Queue = multi_proc_queue
         if db_wrapper is None:
             db_wrapper, _unused = DbFactory.DbFactory.get_wrapper(application_args, multiproc=False, poolsize=2)
+        self._account_manager = account_manager.AccountManager(application_args, db_wrapper=db_wrapper)
         self.__db_submit: DbPogoProtoSubmit = db_wrapper.proto_submit
         self.__application_args = application_args
         self.__mitm_mapper: MitmMapper = mitm_mapper
@@ -183,6 +185,7 @@ class SerializedMitmDataProcessor(Process):
             elif data_type == 102:
                 playerlevel = self.__mitm_mapper.get_playerlevel(origin)
                 mons_disabled  = self._mons_disabled_for_worker(origin)
+                self._account_manager.add_encounters(origin)
 
                 if playerlevel >= 30 and not mons_disabled:
                     origin_logger.debug("Processing encounter received at {}", processed_timestamp)

@@ -814,6 +814,131 @@ class DbWrapper:
                                                                           str(longitude))
         self.execute(query, commit=True)
 
+    def get_current_account_for_device(self, origin):
+        query = '''
+            SELECT pa.username,pa.login_type,pa.account_id,pa.encounters
+                FROM settings_device d
+                INNER JOIN settings_pogoauth pa
+                    ON (d.device_id=pa.device_id)
+                WHERE d.name=%s'''
+        res = self.execute(query, (origin,))
+        if not res or not len(res):
+            return None
+        res = res[0]
+        return {
+            'username': res[0],
+            'login_type': res[1],
+            'account_id': res[2],
+            'encounters': res[3]}
+
+    def _format_epoch_as_utc(self, epoch):
+        return datetime.utcfromtimestamp(
+            epoch).strftime("%Y-%m-%d %H:%M:%S")
+
+    def _get_device_id_for_device(self, origin):
+        query = '''SELECT device_id from settings_device where name=%s'''
+        res = self.execute(query, (origin, ))
+        if not res or not len(res):
+            return
+        return res[0][0]
+
+    def _get_new_account_for_device(self, origin, device_id):
+        # `disabled` tinyint(4) NOT NULL DEFAULT 0,
+        # `last_used_at` int(11) NOT NULL DEFAULT 0,
+        # `encounters` int(11) NOT NULL DEFAULT 0,
+        # `encounters_start_at` int(11) NOT NULL DEFAULT 0,
+        # `banned_at` int(11) NOT NULL DEFAULT 0,
+        # `last_selected_at` int(11) NOT NULL DEFAULT 0,
+
+        now = time.time()
+        one_day_ago = now - 86400
+        encounter_limit = self.application_args.account_encounter_limit
+        query = '''
+            SELECT pa.username,pa.password,pa.login_type,pa.account_id,pa.encounters,pa.encounters_start_at,pa.last_used_at,pa.last_selected_at,pa.banned_at
+                FROM settings_pogoauth pa
+                WHERE pa.disabled=0
+                    AND pa.device_id is NULL
+                    AND pa.banned_at < %s
+                    AND (pa.encounters < %s OR pa.encounters_start_at < %s)
+                ORDER BY pa.last_used_at ASC, pa.last_selected_at ASC, pa.account_id ASC
+                LIMIT 10'''
+
+        res = self.execute(query, (one_day_ago, encounter_limit, one_day_ago))
+        if not res or not len(res):
+            return None
+        res = res[int(random.random() * len(res))]
+        acct = {
+            'username': res[0],
+            'password': res[1],
+            'login_type': res[2],
+            'account_id': res[3],
+            'encounters': res[4],
+            'encounters_start_at': res[5],
+            'last_used_at': res[6],
+            'last_selected_at': res[7],
+            'banned_at': res[8]}
+
+        encounters = acct['encounters']
+
+        to_set = 'SET device_id=%s,last_selected_at=%s'
+        params = [device_id, now]
+        if acct['encounters_start_at'] <= one_day_ago:
+            to_set += ',encounters=0,encounters_start_at=%s'
+            params.append(now)
+            acct['encounters'] = 0
+            acct['encounters_start_at'] = now
+
+        query = 'UPDATE settings_pogoauth ' + to_set + ' WHERE device_id is NULL AND account_id=%s'
+        params.append(acct['account_id'])
+        res = self.execute(query, tuple(params), commit=True)
+        if not res:
+            logger.warning('Picking account %s for device %s raced, will try another...' % (acct['username'], origin))
+            return
+
+        logger.info(('Picked account %s for device %s, last_selected_at %s, last_used_at %s'
+                    ', encounters %s, banned_at %s') % (
+                        acct['username'],
+                        origin,
+                        self._format_epoch_as_utc(acct['last_selected_at']),
+                        self._format_epoch_as_utc(acct['last_used_at']),
+                        encounters,
+                        self._format_epoch_as_utc(acct['banned_at'])))
+        return acct
+
+    def get_new_account_for_device(self, origin):
+        device_id = self._get_device_id_for_device(origin)
+        if device_id is None:
+            logger.error('get_new_account_for_device(): no device_id for origin %s' % origin)
+            return
+
+        query = '''UPDATE settings_pogoauth SET device_id=NULL WHERE device_id=%s'''
+        self.execute(query, (device_id,), commit=True)
+        attempts = 10
+        for x in range(attempts):
+            acct = self._get_new_account_for_device(origin, device_id)
+            if acct is not None:
+                return acct
+        logger.error('get_new_account_for_device(): failed to find free account for origin %s' % origin)
+        return
+
+    def update_encounters_for_account(self, username, login_type, num):
+        query = '''UPDATE settings_pogoauth
+                    SET encounters=%s,last_used_at=%s
+                    WHERE username=%s
+                        AND login_type=%s
+                        AND encounters < %s'''
+        self.execute(query, (num, time.time(), username, login_type, num), commit=True)
+
+    def set_account_banned(self, username, login_type, encounters):
+        now = time.time()
+        banned_thresh = now - 86400
+        query = '''UPDATE settings_pogoauth
+                    SET banned_at=%s,last_used_at=%s,encounters=%s
+                    WHERE username=%s
+                        AND login_type=%s
+                        AND banned_at < %s'''
+        self.execute(query, (now, now, encounters, username, login_type, banned_thresh), commit=True)
+
     def get_detected_spawns(self, geofence_helper, include_event_id) -> List[Location]:
         logger.debug3("DbWrapper::get_detected_spawns called")
 

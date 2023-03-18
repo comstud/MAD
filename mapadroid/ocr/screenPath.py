@@ -7,6 +7,7 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
+from mapadroid import account_manager
 from mapadroid.ocr.screen_type import ScreenType
 from mapadroid.utils import MappingManager
 from mapadroid.utils.collections import Login_GGL, Login_PTC
@@ -31,6 +32,7 @@ class WordToScreenMatching(object):
         self._ratio: float = 0.0
 
         self._logintype: LoginType = LoginType.UNKNOWN
+        self._account_manager = account_manager.AccountManager(args)
         self._PTC_accounts: List[Login_PTC] = []
         self._GGL_accounts: List[Login_GGL] = []
         self._accountcount: int = 0
@@ -72,6 +74,11 @@ class WordToScreenMatching(object):
         return
 
     def get_next_account(self):
+        acct = self._account_manager.get_new_account_for_device(self.origin)
+        if acct:
+            self._PTC_accounts = [Login_PTC(acct['username'], acct['password'])]
+            self._accountcount = 1
+
         if self._accountcount == 0:
             self._logger.info('Cannot return new account - no one is set')
             return None
@@ -300,6 +307,9 @@ class WordToScreenMatching(object):
             self._nextscreen = ScreenType.UNDEFINED
             self._logger.error('Account permabanned!')
             screentype = ScreenType.ERROR
+        elif screentype == ScreenType.MAINTENANCE:
+            self._nextscreen = ScreenType.UNDEFINED
+            self._logger.error('Account saw maintenance warning!')
         elif screentype == ScreenType.POGO:
             screentype = self.__check_pogo_screen_ban_or_loading(screentype)
         elif screentype == ScreenType.QUEST:

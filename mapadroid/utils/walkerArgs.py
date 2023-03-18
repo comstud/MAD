@@ -68,6 +68,8 @@ def parse_args():
                         help='The URL for mitm-communicator')
     parser.add_argument('-umitm', '--use_mitm_communicator', required=False, type=bool, default=False,
                         help='Enable use of mitm-communicator')
+    parser.add_argument('-ael', '--account_encounter_limit', required=False, type=int, default=7000,
+                        help='Limit number of encounters per account')
 
     # MITM Receiver (PD receiver)
     parser.add_argument('-mrip', '--mitmreceiver_ip', required=False, default="0.0.0.0", type=str,

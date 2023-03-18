@@ -52,6 +52,7 @@ class PogoWindows:
                                       'modifizierte', 'Verstoß', 'Sperrung', 'Drittpartei']
         self._ScreenType[17]: list = ['Suspension', 'suspended', 'violating', 'days', ]
         self._ScreenType[18]: list = ['Termination', 'terminated', 'permanently']
+        self._ScreenType[19]: list = ['geplanter', 'Wartungsarbeiten', 'maintenance.', 'maintenance']
         self._ScreenType[21]: list = ['GPS', 'signal', 'GPS-Signal', '(11)', 'introuvable.',
                                       'found.', 'gefunden.', 'Signal', 'geortet', 'detect', '(12)']
         self._ScreenType[23]: list = ['CLUB', 'KIDS']

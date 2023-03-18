@@ -8,6 +8,7 @@ from enum import Enum
 from threading import Event, Lock, Thread, current_thread
 from typing import List, Optional
 
+from mapadroid import account_manager
 from mapadroid.db.DbWrapper import DbWrapper
 from mapadroid.mitm_receiver.MitmMapper import MitmMapper
 from mapadroid.ocr.pogoWindows import PogoWindows
@@ -52,6 +53,7 @@ class WorkerBase(AbstractWorker):
         self._dev_id: int = dev_id
         self._event = event
         self._origin: str = origin
+        self._account_manager = account_manager.AccountManager(args, db_wrapper=db_wrapper)
         self._application_args = args
         self._last_known_state = last_known_state
         self._work_mutex = Lock()
@@ -291,7 +293,12 @@ class WorkerBase(AbstractWorker):
 
         with self._work_mutex:
             try:
-                self._turn_screen_on_and_start_pogo()
+                acct = self._db_wrapper.get_current_account_for_device(self._origin)
+                if acct:
+                    self._turn_screen_on_and_start_pogo()
+                else:
+                    self.logger.info('No account configured right now... switching.')
+                    self._switch_user()
                 self._get_screen_size()
                 # register worker  in routemanager
                 self.logger.info("Try to register in Routemanager {}",
@@ -372,6 +379,16 @@ class WorkerBase(AbstractWorker):
             return
 
         while not self._stop_worker_event.is_set():
+            try:
+                encounters = self._account_manager.account_at_encounter_limit(self._origin)
+                if encounters:
+                    self.logger.warning('Switching accounts due to account at encounters limit: %s' % encounters)
+                    self._switch_user(no_wait=True)
+                    # just exit this worker
+                    break
+            except Exception as exc:
+                self.logger.error('Got exception checking encounter limit: %s' % exc)
+
             try:
                 # TODO: consider getting results of health checks and aborting the entire worker?
                 walkercheck = self.check_walker()
@@ -630,6 +647,10 @@ class WorkerBase(AbstractWorker):
                     'Found update pogo screen - sleeping 5 minutes for another check of the screen')
                 # update pogo - later with new rgc version
                 time.sleep(300)
+            elif screen_type == ScreenType.MAINTENANCE:
+                self._account_manager.set_account_banned(self._origin)
+                self.logger.warning('Switching accounts due to maintenance screen')
+                self._switch_user(no_wait=True)
             elif screen_type in [ScreenType.ERROR, ScreenType.FAILURE]:
                 self.logger.warning('Something wrong with screendetection or pogo failure screen')
                 self._loginerrorcounter += 1
@@ -687,12 +708,14 @@ class WorkerBase(AbstractWorker):
             time.sleep(1)
         return self._start_pogo()
 
-    def _switch_user(self):
+    def _switch_user(self, no_wait=False):
         self.logger.info('Switching User - please wait ...')
         self._stop_pogo()
         time.sleep(5)
         self._communicator.reset_app_data("com.nianticlabs.pokemongo")
         self._turn_screen_on_and_start_pogo()
+        if no_wait:
+            return True
         if not self._ensure_pogo_topmost():
             self.logger.error('Kill Worker...')
             self._stop_worker_event.set()
