@@ -28,7 +28,7 @@ from mapadroid.utils.logging import (LoggerEnums, LogLevelChanger, get_logger,
 logger = get_logger(LoggerEnums.mitm)
 app = Flask(__name__)
 
-INTERESTING_PROTOS = set([106, 102, 101, 104, 4, 156, 145])
+INTERESTING_PROTOS = set([106, 102, 101, 104, 4, 156, 145, 1405])
 
 def validate_accepted(func) -> Any:
     @wraps(func)

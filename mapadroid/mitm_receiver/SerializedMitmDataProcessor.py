@@ -108,8 +108,9 @@ class SerializedMitmDataProcessor(Process):
                         processed_timestamp, threshold_seconds, datetime.fromtimestamp(minimum_timestamp))
                     return
 
-
-            if data_type == 106:
+            if data_type == 106 and not data["payload"].get("cells", []):
+                origin_logger.debug("Ignoring apparently empty GMO")
+            elif data_type == 106:
                 origin_logger.debug("Processing GMO. Received at {}", processed_timestamp)
                 mons_disabled  = self._mons_disabled_for_worker(origin)
 
@@ -245,6 +246,11 @@ class SerializedMitmDataProcessor(Process):
                 self.__db_submit.gym(origin, data["payload"])
                 end_time = self.get_time_ms() - start_time
                 origin_logger.debug("Done processing proto 156 in {}ms", end_time)
+            elif data_type == 1405:
+                origin_logger.debug("Processing proto 1405 (GET_ROUTES)")
+                self.__db_submit.routes(origin, data['payload'], received_timestamp)
+                end_time = self.get_time_ms() - start_time
+                origin_logger.debug("Done processing proto 1405 in {}ms", end_time)
 
     @staticmethod
     def get_time_ms():
