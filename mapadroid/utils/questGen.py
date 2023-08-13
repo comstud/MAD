@@ -404,12 +404,13 @@ class QuestGen:
                         text = _('Win in the GO Battle League {0} times')
                     elif in_go_battle_league and not vs_player:
                         text = _('Battle in the GO Battle League {0} times')
-                elif con.get('type') == 41:
-                    combat_type = con.get("with_combat_type", {}).get("combat_type", [])
-                    if 6 in combat_type:
-                        text = _('{verb} in the GO Battle League {0} times')
-                    elif 3 in combat_type:
-                        text = _('{verb} against a friend {0} times')
+# this died with can't '6 in <string>' when 6 is int. this is expected to be an array?
+#                elif con.get('type') == 41:
+#                    combat_type = con.get("with_combat_type", {}).get("combat_type", [])
+#                    if 6 in combat_type:
+#                        text = _('{verb} in the GO Battle League {0} times')
+#                    elif 3 in combat_type:
+#                        text = _('{verb} against a friend {0} times')
         elif typeid == 28:
             # Take snapshots quest
             if re.search(r'"type": 28', condition) is not None:
