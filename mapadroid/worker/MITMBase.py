@@ -372,7 +372,11 @@ class MITMBase(WorkerBase):
 
             self._check_for_mad_job()
             if reboot and self._not_injected_count >= injection_thresh_reboot:
-                self.logger.warning("Not injected in time - reboot")
+                acct = self._db_wrapper.get_current_account_for_device(self._origin)
+                if acct:
+                    self.logger.info("account {} failed to send data upon connect/reboot/whatever, switching", acct.get('username', '<null>'))
+                self._switch_user(); # added by comstud
+                self.logger.warning("Not injected in time - reboot (after user switch, just in case)")
                 self._reboot(self._mitm_mapper)
                 return False
             self.logger.info("Didn't receive any data yet. (Retry count: {}/{})", self._not_injected_count,

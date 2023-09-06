@@ -389,12 +389,14 @@ class WordToScreenMatching(object):
 
     def __handle_retry_screen(self, diff, global_dict) -> None:
         self._nextscreen = ScreenType.UNDEFINED
-        click_text = 'DIFFERENT,AUTRE,AUTORISER,ANDERES,KONTO,ACCOUNT'
-        n_boxes = len(global_dict['text'])
-        for i in range(n_boxes):
-            if any(elem in (global_dict['text'][i]) for elem in click_text.split(",")):
-                self._click_center_button(diff, global_dict, i)
-                time.sleep(2)
+        #click_text = 'DIFFERENT,AUTRE,AUTORISER,ANDERES,KONTO,ACCOUNT'
+        #n_boxes = len(global_dict['text'])
+        #for i in range(n_boxes):
+        #    if any(elem in (global_dict['text'][i]) for elem in click_text.split(",")):
+        #        self._click_center_button(diff, global_dict, i)
+        #        time.sleep(2)
+        # handle login being pre-populated
+        self._communicator.reset_app_data("com.nianticlabs.pokemongo")
 
     def __handle_login_timeout(self, diff, global_dict) -> None:
         self._nextscreen = ScreenType.UNDEFINED
